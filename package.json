@@ -1,9 +1,10 @@
 {
   "name": "vue-test-utils",
-  "private": true,
+  "private": false,
   "workspaces": [
     "packages/*"
   ],
+  "main": "packages/test-utils/vue-test-utils.umd.js",
   "scripts": {
     "bootstrap": "lerna bootstrap",
     "build": "lerna run build",
@@ -76,12 +77,5 @@
     "vuex": "^3.0.1",
     "webpack": "^3.0.1",
     "webpack-node-externals": "^1.6.0"
-  },
-  "dependencies": {
-    "rollup-plugin-buble": "^0.19.4",
-    "rollup-plugin-commonjs": "^9.2.0",
-    "rollup-plugin-flow-no-whitespace": "^1.0.0",
-    "rollup-plugin-json": "^3.1.0",
-    "rollup-plugin-node-resolve": "^3.4.0"
   }
 }
