@@ -6,13 +6,14 @@ import createInterceptPlugin from './create-intercept-plugin'
 import addProvide from './add-provide'
 import { stubComponents } from './stub-components'
 import { throwError } from './util'
+import { componentHasProperty } from './validators'
 import { cloneDeep } from 'lodash'
 
 export default function createConstructor (component: Component, options: Options): Component {
   const vue = options.localVue || Vue
 
   if (options.context) {
-    if (!component.functional) {
+    if (!componentHasProperty(component, 'functional')) {
       throwError('mount.context can only be used when mounting a functional component')
     }
 
