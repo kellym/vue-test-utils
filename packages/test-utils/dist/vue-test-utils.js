@@ -3,7 +3,11 @@
 function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
 
 var Vue = _interopDefault(require('vue'));
-var vueTemplateCompiler = require('vue-template-compiler');
+var validators = require('shared/validators');
+var util = require('shared/util');
+var eventTypes = _interopDefault(require('dom-event-types'));
+var createInstance = _interopDefault(require('create-instance'));
+var mergeOptions = require('shared/merge-options');
 
 if (typeof Element !== 'undefined' && !Element.prototype.matches) {
   Element.prototype.matches =
@@ -45,207 +49,6 @@ if (typeof Object.assign !== 'function') {
   })();
 }
 
-// 
-
-function throwError (msg) {
-  throw new Error(("[vue-test-utils]: " + msg))
-}
-
-function warn (msg) {
-  console.error(("[vue-test-utils]: " + msg));
-}
-
-var camelizeRE = /-(\w)/g;
-
-var camelize = function (str) {
-  var camelizedStr = str.replace(camelizeRE, function (_, c) { return c ? c.toUpperCase() : ''; }
-  );
-  return camelizedStr.charAt(0).toLowerCase() + camelizedStr.slice(1)
-};
-
-/**
- * Capitalize a string.
- */
-var capitalize = function (str) { return str.charAt(0).toUpperCase() + str.slice(1); };
-
-/**
- * Hyphenate a camelCase string.
- */
-var hyphenateRE = /\B([A-Z])/g;
-var hyphenate = function (str) { return str.replace(hyphenateRE, '-$1').toLowerCase(); };
-
-var vueVersion = Number(
-  ((Vue.version.split('.')[0]) + "." + (Vue.version.split('.')[1]))
-);
-
-function hasOwnProperty (obj, prop) {
-  return Object.prototype.hasOwnProperty.call(obj, prop)
-}
-
-function resolveComponent (id, components) {
-  if (typeof id !== 'string') {
-    return
-  }
-  // check local registration variations first
-  if (hasOwnProperty(components, id)) {
-    return components[id]
-  }
-  var camelizedId = camelize(id);
-  if (hasOwnProperty(components, camelizedId)) {
-    return components[camelizedId]
-  }
-  var PascalCaseId = capitalize(camelizedId);
-  if (hasOwnProperty(components, PascalCaseId)) {
-    return components[PascalCaseId]
-  }
-  // fallback to prototype chain
-  return components[id] || components[camelizedId] || components[PascalCaseId]
-}
-
-function semVerGreaterThan (a, b) {
-  var pa = a.split('.');
-  var pb = b.split('.');
-  for (var i = 0; i < 3; i++) {
-    var na = Number(pa[i]);
-    var nb = Number(pb[i]);
-    if (na > nb) { return true }
-    if (nb > na) { return false }
-    if (!isNaN(na) && isNaN(nb)) { return true }
-    if (isNaN(na) && !isNaN(nb)) { return false }
-  }
-  return false
-}
-
-// 
-
-function isDomSelector (selector) {
-  if (typeof selector !== 'string') {
-    return false
-  }
-
-  try {
-    if (typeof document === 'undefined') {
-      throwError(
-        "mount must be run in a browser environment like " +
-          "PhantomJS, jsdom or chrome"
-      );
-    }
-  } catch (error) {
-    throwError(
-      "mount must be run in a browser environment like " +
-        "PhantomJS, jsdom or chrome"
-    );
-  }
-
-  try {
-    document.querySelector(selector);
-    return true
-  } catch (error) {
-    return false
-  }
-}
-
-function isVueComponent (component) {
-  if (typeof component === 'function' && component.options) {
-    return true
-  }
-
-  if (component === null || typeof component !== 'object') {
-    return false
-  }
-
-  if (component.extends || component._Ctor) {
-    return true
-  }
-
-  if (typeof component.template === 'string') {
-    return true
-  }
-
-  return typeof component.render === 'function'
-}
-
-function componentNeedsCompiling (component) {
-  return (
-    component &&
-    !component.render &&
-    (component.template || component.extends || component.extendOptions) &&
-    !component.functional
-  )
-}
-
-function isRefSelector (refOptionsObject) {
-  if (
-    typeof refOptionsObject !== 'object' ||
-    Object.keys(refOptionsObject || {}).length !== 1
-  ) {
-    return false
-  }
-
-  return typeof refOptionsObject.ref === 'string'
-}
-
-function isNameSelector (nameOptionsObject) {
-  if (typeof nameOptionsObject !== 'object' || nameOptionsObject === null) {
-    return false
-  }
-
-  return !!nameOptionsObject.name
-}
-
-function templateContainsComponent (
-  template,
-  name
-) {
-  return [capitalize, camelize, hyphenate].some(function (format) {
-    var re = new RegExp(("<" + (format(name)) + "\\s*(\\s|>|(/>))"), 'g');
-    return re.test(template)
-  })
-}
-
-function isPlainObject (obj) {
-  return Object.prototype.toString.call(obj) === '[object Object]'
-}
-
-function makeMap (
-  str,
-  expectsLowerCase
-) {
-  var map = Object.create(null);
-  var list = str.split(',');
-  for (var i = 0; i < list.length; i++) {
-    map[list[i]] = true;
-  }
-  return expectsLowerCase
-    ? function (val) { return map[val.toLowerCase()] }
-    : function (val) { return map[val] }
-}
-
-var isHTMLTag = makeMap(
-  'html,body,base,head,link,meta,style,title,' +
-  'address,article,aside,footer,header,h1,h2,h3,h4,h5,h6,hgroup,nav,section,' +
-  'div,dd,dl,dt,figcaption,figure,picture,hr,img,li,main,ol,p,pre,ul,' +
-  'a,b,abbr,bdi,bdo,br,cite,code,data,dfn,em,i,kbd,mark,q,rp,rt,rtc,ruby,' +
-  's,samp,small,span,strong,sub,sup,time,u,var,wbr,area,audio,map,track,' +
-  'embed,object,param,source,canvas,script,noscript,del,ins,' +
-  'caption,col,colgroup,table,thead,tbody,td,th,tr,video,' +
-  'button,datalist,fieldset,form,input,label,legend,meter,optgroup,option,' +
-  'output,progress,select,textarea,' +
-  'details,dialog,menu,menuitem,summary,' +
-  'content,element,shadow,template,blockquote,iframe,tfoot'
-);
-
-// this map is intentionally selective, only covering SVG elements that may
-// contain child elements.
-var isSVG = makeMap(
-  'svg,animate,circle,clippath,cursor,defs,desc,ellipse,filter,font-face,' +
-  'foreignObject,g,glyph,image,line,marker,mask,missing-glyph,path,pattern,' +
-  'polygon,polyline,rect,switch,symbol,text,textpath,tspan,use,view',
-  true
-);
-
-var isReservedTag = function (tag) { return isHTMLTag(tag) || isSVG(tag); };
-
 var NAME_SELECTOR = 'NAME_SELECTOR';
 var COMPONENT_SELECTOR = 'COMPONENT_SELECTOR';
 var REF_SELECTOR = 'REF_SELECTOR';
@@ -262,10 +65,10 @@ var FUNCTIONAL_OPTIONS =
 function getSelectorType (
   selector
 ) {
-  if (isDomSelector(selector)) { return DOM_SELECTOR }
-  if (isVueComponent(selector)) { return COMPONENT_SELECTOR }
-  if (isNameSelector(selector)) { return NAME_SELECTOR }
-  if (isRefSelector(selector)) { return REF_SELECTOR }
+  if (validators.isDomSelector(selector)) { return DOM_SELECTOR }
+  if (validators.isVueComponent(selector)) { return COMPONENT_SELECTOR }
+  if (validators.isNameSelector(selector)) { return NAME_SELECTOR }
+  if (validators.isRefSelector(selector)) { return REF_SELECTOR }
 
   return INVALID_SELECTOR
 }
@@ -276,7 +79,7 @@ function getSelector (
 ) {
   var type = getSelectorType(selector);
   if (type === INVALID_SELECTOR) {
-    throwError(
+    util.throwError(
       "wrapper." + methodName + "() must be passed a valid CSS selector, Vue " +
       "constructor, or valid find option object"
     );
@@ -351,7 +154,7 @@ var TransitionStub = {
 
     // warn multiple elements
     if (children.length > 1) {
-      warn(
+      util.warn(
         "<transition> can only be used on a single element. " + "Use " +
          '<transition-group> for lists.'
       );
@@ -362,7 +165,7 @@ var TransitionStub = {
     // warn invalid mode
     if (mode && mode !== 'in-out' && mode !== 'out-in'
     ) {
-      warn(
+      util.warn(
         'invalid <transition> mode: ' + mode
       );
     }
@@ -452,18 +255,18 @@ var WrapperArray = function WrapperArray (wrappers) {
   // $FlowIgnore
   Object.defineProperty(this, 'wrappers', {
     get: function () { return wrappers; },
-    set: function () { return throwError('wrapperArray.wrappers is read-only'); }
+    set: function () { return util.throwError('wrapperArray.wrappers is read-only'); }
   });
   // $FlowIgnore
   Object.defineProperty(this, 'length', {
     get: function () { return length; },
-    set: function () { return throwError('wrapperArray.length is read-only'); }
+    set: function () { return util.throwError('wrapperArray.length is read-only'); }
   });
 };
 
 WrapperArray.prototype.at = function at (index) {
   if (index > this.length - 1) {
-    throwError(("no item exists at " + index));
+    util.throwError(("no item exists at " + index));
   }
   return this.wrappers[index]
 };
@@ -471,7 +274,7 @@ WrapperArray.prototype.at = function at (index) {
 WrapperArray.prototype.attributes = function attributes () {
   this.throwErrorIfWrappersIsEmpty('attributes');
 
-  throwError(
+  util.throwError(
     "attributes must be called on a single wrapper, use " +
       "at(i) to access a wrapper"
   );
@@ -480,7 +283,7 @@ WrapperArray.prototype.attributes = function attributes () {
 WrapperArray.prototype.classes = function classes () {
   this.throwErrorIfWrappersIsEmpty('classes');
 
-  throwError(
+  util.throwError(
     "classes must be called on a single wrapper, use " +
       "at(i) to access a wrapper"
   );
@@ -509,7 +312,7 @@ WrapperArray.prototype.visible = function visible () {
 WrapperArray.prototype.emitted = function emitted () {
   this.throwErrorIfWrappersIsEmpty('emitted');
 
-  throwError(
+  util.throwError(
     "emitted must be called on a single wrapper, use " +
       "at(i) to access a wrapper"
   );
@@ -518,7 +321,7 @@ WrapperArray.prototype.emitted = function emitted () {
 WrapperArray.prototype.emittedByOrder = function emittedByOrder () {
   this.throwErrorIfWrappersIsEmpty('emittedByOrder');
 
-  throwError(
+  util.throwError(
     "emittedByOrder must be called on a single wrapper, " +
       "use at(i) to access a wrapper"
   );
@@ -552,7 +355,7 @@ WrapperArray.prototype.hasStyle = function hasStyle (style, value) {
 WrapperArray.prototype.findAll = function findAll () {
   this.throwErrorIfWrappersIsEmpty('findAll');
 
-  throwError(
+  util.throwError(
     "findAll must be called on a single wrapper, use " +
       "at(i) to access a wrapper"
   );
@@ -561,7 +364,7 @@ WrapperArray.prototype.findAll = function findAll () {
 WrapperArray.prototype.find = function find () {
   this.throwErrorIfWrappersIsEmpty('find');
 
-  throwError(
+  util.throwError(
     "find must be called on a single wrapper, use at(i) " +
       "to access a wrapper"
   );
@@ -570,7 +373,7 @@ WrapperArray.prototype.find = function find () {
 WrapperArray.prototype.html = function html () {
   this.throwErrorIfWrappersIsEmpty('html');
 
-  throwError(
+  util.throwError(
     "html must be called on a single wrapper, use at(i) " +
       "to access a wrapper"
   );
@@ -603,7 +406,7 @@ WrapperArray.prototype.isVueInstance = function isVueInstance () {
 WrapperArray.prototype.name = function name () {
   this.throwErrorIfWrappersIsEmpty('name');
 
-  throwError(
+  util.throwError(
     "name must be called on a single wrapper, use at(i) " +
       "to access a wrapper"
   );
@@ -612,7 +415,7 @@ WrapperArray.prototype.name = function name () {
 WrapperArray.prototype.props = function props () {
   this.throwErrorIfWrappersIsEmpty('props');
 
-  throwError(
+  util.throwError(
     "props must be called on a single wrapper, use " +
       "at(i) to access a wrapper"
   );
@@ -621,7 +424,7 @@ WrapperArray.prototype.props = function props () {
 WrapperArray.prototype.text = function text () {
   this.throwErrorIfWrappersIsEmpty('text');
 
-  throwError(
+  util.throwError(
     "text must be called on a single wrapper, use at(i) " +
       "to access a wrapper"
   );
@@ -629,7 +432,7 @@ WrapperArray.prototype.text = function text () {
 
 WrapperArray.prototype.throwErrorIfWrappersIsEmpty = function throwErrorIfWrappersIsEmpty (method) {
   if (this.wrappers.length === 0) {
-    throwError((method + " cannot be called on 0 items"));
+    util.throwError((method + " cannot be called on 0 items"));
   }
 };
 
@@ -674,7 +477,7 @@ WrapperArray.prototype.setChecked = function setChecked (checked) {
 WrapperArray.prototype.setSelected = function setSelected () {
   this.throwErrorIfWrappersIsEmpty('setSelected');
 
-  throwError(
+  util.throwError(
     "setSelected must be called on a single wrapper, " +
       "use at(i) to access a wrapper"
   );
@@ -688,7 +491,7 @@ WrapperArray.prototype.trigger = function trigger (event, options) {
 
 WrapperArray.prototype.update = function update () {
   this.throwErrorIfWrappersIsEmpty('update');
-  warn(
+  util.warn(
     "update has been removed. All changes are now " +
       "synchrnous without calling update"
   );
@@ -707,37 +510,37 @@ var ErrorWrapper = function ErrorWrapper (selector) {
 };
 
 ErrorWrapper.prototype.at = function at () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call at() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.attributes = function attributes () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call attributes() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.classes = function classes () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call classes() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.contains = function contains () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call contains() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.emitted = function emitted () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call emitted() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.emittedByOrder = function emittedByOrder () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call emittedByOrder() on empty Wrapper")
   );
 };
@@ -747,158 +550,158 @@ ErrorWrapper.prototype.exists = function exists () {
 };
 
 ErrorWrapper.prototype.filter = function filter () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call filter() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.visible = function visible () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call visible() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.hasAttribute = function hasAttribute () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call hasAttribute() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.hasClass = function hasClass () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call hasClass() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.hasProp = function hasProp () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call hasProp() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.hasStyle = function hasStyle () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call hasStyle() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.findAll = function findAll () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call findAll() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.find = function find () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call find() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.html = function html () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call html() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.is = function is () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call is() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.isEmpty = function isEmpty () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call isEmpty() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.isVisible = function isVisible () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call isVisible() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.isVueInstance = function isVueInstance () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call isVueInstance() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.name = function name () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call name() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.props = function props () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call props() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.text = function text () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call text() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.setComputed = function setComputed () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call setComputed() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.setData = function setData () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call setData() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.setMethods = function setMethods () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call setMethods() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.setProps = function setProps () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call setProps() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.setValue = function setValue () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call setValue() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.setChecked = function setChecked () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call setChecked() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.setSelected = function setSelected () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call setSelected() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.trigger = function trigger () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call trigger() on empty Wrapper")
   );
 };
 
 ErrorWrapper.prototype.update = function update () {
-  throwError(
+  util.throwError(
     "update has been removed from vue-test-utils." +
     "All updates are now synchronous by default"
   );
 };
 
 ErrorWrapper.prototype.destroy = function destroy () {
-  throwError(
+  util.throwError(
     ("find did not return " + (this.selector) + ", cannot call destroy() on empty Wrapper")
   );
 };
@@ -1039,7 +842,7 @@ function find (
   selector
 ) {
   if ((root instanceof Element) && selector.type !== DOM_SELECTOR) {
-    throwError(
+    util.throwError(
       "cannot find a Vue instance on a DOM node. The node " +
       "you are calling find on does not exist in the " +
       "VDom. Are you adding the node as innerHTML?"
@@ -1049,9 +852,9 @@ function find (
   if (
     selector.type === COMPONENT_SELECTOR &&
     selector.value.functional &&
-    vueVersion < 2.3
+    util.vueVersion < 2.3
   ) {
-    throwError(
+    util.throwError(
       "find for functional components is not supported " +
         "in Vue < 2.3"
     );
@@ -1062,7 +865,7 @@ function find (
   }
 
   if (!root && selector.type !== DOM_SELECTOR) {
-    throwError(
+    util.throwError(
       "cannot find a Vue instance on a DOM node. The node " +
       "you are calling find on does not exist in the " +
       "VDom. Are you adding the node as innerHTML?"
@@ -1070,7 +873,7 @@ function find (
   }
 
   if (!vm && selector.type === REF_SELECTOR) {
-    throwError(
+    util.throwError(
       "$ref selectors can only be used on Vue component " + "wrappers"
     );
   }
@@ -1154,540 +957,13 @@ function recursivelySetData (vm, target, data) {
     var val = data[key];
     var targetVal = target[key];
 
-    if (isPlainObject(val) && isPlainObject(targetVal)) {
+    if (validators.isPlainObject(val) && validators.isPlainObject(targetVal)) {
       recursivelySetData(vm, targetVal, val);
     } else {
       vm.$set(target, key, val);
     }
   });
 }
-
-var abort = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var afterprint = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var animationend = {"eventInterface":"AnimationEvent","bubbles":true,"cancelable":false};
-var animationiteration = {"eventInterface":"AnimationEvent","bubbles":true,"cancelable":false};
-var animationstart = {"eventInterface":"AnimationEvent","bubbles":true,"cancelable":false};
-var appinstalled = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var audioprocess = {"eventInterface":"AudioProcessingEvent"};
-var audioend = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var audiostart = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var beforeprint = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var beforeunload = {"eventInterface":"BeforeUnloadEvent","bubbles":false,"cancelable":true};
-var beginEvent = {"eventInterface":"TimeEvent","bubbles":false,"cancelable":false};
-var blur = {"eventInterface":"FocusEvent","bubbles":false,"cancelable":false};
-var boundary = {"eventInterface":"SpeechSynthesisEvent","bubbles":false,"cancelable":false};
-var cached = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var canplay = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var canplaythrough = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var change = {"eventInterface":"Event","bubbles":true,"cancelable":false};
-var chargingchange = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var chargingtimechange = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var checking = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var click = {"eventInterface":"MouseEvent","bubbles":true,"cancelable":true};
-var close = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var complete = {"eventInterface":"OfflineAudioCompletionEvent"};
-var compositionend = {"eventInterface":"CompositionEvent","bubbles":true,"cancelable":true};
-var compositionstart = {"eventInterface":"CompositionEvent","bubbles":true,"cancelable":true};
-var compositionupdate = {"eventInterface":"CompositionEvent","bubbles":true,"cancelable":false};
-var contextmenu = {"eventInterface":"MouseEvent","bubbles":true,"cancelable":true};
-var copy = {"eventInterface":"ClipboardEvent"};
-var cut = {"eventInterface":"ClipboardEvent","bubbles":true,"cancelable":true};
-var dblclick = {"eventInterface":"MouseEvent","bubbles":true,"cancelable":true};
-var devicechange = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var devicelight = {"eventInterface":"DeviceLightEvent","bubbles":false,"cancelable":false};
-var devicemotion = {"eventInterface":"DeviceMotionEvent","bubbles":false,"cancelable":false};
-var deviceorientation = {"eventInterface":"DeviceOrientationEvent","bubbles":false,"cancelable":false};
-var deviceproximity = {"eventInterface":"DeviceProximityEvent","bubbles":false,"cancelable":false};
-var dischargingtimechange = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var DOMActivate = {"eventInterface":"UIEvent","bubbles":true,"cancelable":true};
-var DOMAttributeNameChanged = {"eventInterface":"MutationNameEvent","bubbles":true,"cancelable":true};
-var DOMAttrModified = {"eventInterface":"MutationEvent","bubbles":true,"cancelable":true};
-var DOMCharacterDataModified = {"eventInterface":"MutationEvent","bubbles":true,"cancelable":true};
-var DOMContentLoaded = {"eventInterface":"Event","bubbles":true,"cancelable":true};
-var DOMElementNameChanged = {"eventInterface":"MutationNameEvent","bubbles":true,"cancelable":true};
-var DOMFocusIn = {"eventInterface":"FocusEvent","bubbles":true,"cancelable":true};
-var DOMFocusOut = {"eventInterface":"FocusEvent","bubbles":true,"cancelable":true};
-var DOMNodeInserted = {"eventInterface":"MutationEvent","bubbles":true,"cancelable":true};
-var DOMNodeInsertedIntoDocument = {"eventInterface":"MutationEvent","bubbles":true,"cancelable":true};
-var DOMNodeRemoved = {"eventInterface":"MutationEvent","bubbles":true,"cancelable":true};
-var DOMNodeRemovedFromDocument = {"eventInterface":"MutationEvent","bubbles":true,"cancelable":true};
-var DOMSubtreeModified = {"eventInterface":"MutationEvent"};
-var downloading = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var drag = {"eventInterface":"DragEvent","bubbles":true,"cancelable":true};
-var dragend = {"eventInterface":"DragEvent","bubbles":true,"cancelable":false};
-var dragenter = {"eventInterface":"DragEvent","bubbles":true,"cancelable":true};
-var dragleave = {"eventInterface":"DragEvent","bubbles":true,"cancelable":false};
-var dragover = {"eventInterface":"DragEvent","bubbles":true,"cancelable":true};
-var dragstart = {"eventInterface":"DragEvent","bubbles":true,"cancelable":true};
-var drop = {"eventInterface":"DragEvent","bubbles":true,"cancelable":true};
-var durationchange = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var emptied = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var end = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var ended = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var endEvent = {"eventInterface":"TimeEvent","bubbles":false,"cancelable":false};
-var error = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var focus = {"eventInterface":"FocusEvent","bubbles":false,"cancelable":false};
-var focusin = {"eventInterface":"FocusEvent","bubbles":true,"cancelable":false};
-var focusout = {"eventInterface":"FocusEvent","bubbles":true,"cancelable":false};
-var fullscreenchange = {"eventInterface":"Event","bubbles":true,"cancelable":false};
-var fullscreenerror = {"eventInterface":"Event","bubbles":true,"cancelable":false};
-var gamepadconnected = {"eventInterface":"GamepadEvent","bubbles":false,"cancelable":false};
-var gamepaddisconnected = {"eventInterface":"GamepadEvent","bubbles":false,"cancelable":false};
-var gotpointercapture = {"eventInterface":"PointerEvent","bubbles":false,"cancelable":false};
-var hashchange = {"eventInterface":"HashChangeEvent","bubbles":true,"cancelable":false};
-var lostpointercapture = {"eventInterface":"PointerEvent","bubbles":false,"cancelable":false};
-var input = {"eventInterface":"Event","bubbles":true,"cancelable":false};
-var invalid = {"eventInterface":"Event","cancelable":true,"bubbles":false};
-var keydown = {"eventInterface":"KeyboardEvent","bubbles":true,"cancelable":true};
-var keypress = {"eventInterface":"KeyboardEvent","bubbles":true,"cancelable":true};
-var keyup = {"eventInterface":"KeyboardEvent","bubbles":true,"cancelable":true};
-var languagechange = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var levelchange = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var load = {"eventInterface":"UIEvent","bubbles":false,"cancelable":false};
-var loadeddata = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var loadedmetadata = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var loadend = {"eventInterface":"ProgressEvent","bubbles":false,"cancelable":false};
-var loadstart = {"eventInterface":"ProgressEvent","bubbles":false,"cancelable":false};
-var mark = {"eventInterface":"SpeechSynthesisEvent","bubbles":false,"cancelable":false};
-var message = {"eventInterface":"MessageEvent","bubbles":false,"cancelable":false};
-var messageerror = {"eventInterface":"MessageEvent","bubbles":false,"cancelable":false};
-var mousedown = {"eventInterface":"MouseEvent","bubbles":true,"cancelable":true};
-var mouseenter = {"eventInterface":"MouseEvent","bubbles":false,"cancelable":false};
-var mouseleave = {"eventInterface":"MouseEvent","bubbles":false,"cancelable":false};
-var mousemove = {"eventInterface":"MouseEvent","bubbles":true,"cancelable":true};
-var mouseout = {"eventInterface":"MouseEvent","bubbles":true,"cancelable":true};
-var mouseover = {"eventInterface":"MouseEvent","bubbles":true,"cancelable":true};
-var mouseup = {"eventInterface":"MouseEvent","bubbles":true,"cancelable":true};
-var nomatch = {"eventInterface":"SpeechRecognitionEvent","bubbles":false,"cancelable":false};
-var notificationclick = {"eventInterface":"NotificationEvent","bubbles":false,"cancelable":false};
-var noupdate = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var obsolete = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var offline = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var online = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var open = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var orientationchange = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var pagehide = {"eventInterface":"PageTransitionEvent","bubbles":false,"cancelable":false};
-var pageshow = {"eventInterface":"PageTransitionEvent","bubbles":false,"cancelable":false};
-var paste = {"eventInterface":"ClipboardEvent","bubbles":true,"cancelable":true};
-var pause = {"eventInterface":"SpeechSynthesisEvent","bubbles":false,"cancelable":false};
-var pointercancel = {"eventInterface":"PointerEvent","bubbles":true,"cancelable":false};
-var pointerdown = {"eventInterface":"PointerEvent","bubbles":true,"cancelable":true};
-var pointerenter = {"eventInterface":"PointerEvent","bubbles":false,"cancelable":false};
-var pointerleave = {"eventInterface":"PointerEvent","bubbles":false,"cancelable":false};
-var pointerlockchange = {"eventInterface":"Event","bubbles":true,"cancelable":false};
-var pointerlockerror = {"eventInterface":"Event","bubbles":true,"cancelable":false};
-var pointermove = {"eventInterface":"PointerEvent","bubbles":true,"cancelable":true};
-var pointerout = {"eventInterface":"PointerEvent","bubbles":true,"cancelable":true};
-var pointerover = {"eventInterface":"PointerEvent","bubbles":true,"cancelable":true};
-var pointerup = {"eventInterface":"PointerEvent","bubbles":true,"cancelable":true};
-var play = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var playing = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var popstate = {"eventInterface":"PopStateEvent","bubbles":true,"cancelable":false};
-var progress = {"eventInterface":"ProgressEvent","bubbles":false,"cancelable":false};
-var push = {"eventInterface":"PushEvent","bubbles":false,"cancelable":false};
-var pushsubscriptionchange = {"eventInterface":"PushEvent","bubbles":false,"cancelable":false};
-var ratechange = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var readystatechange = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var repeatEvent = {"eventInterface":"TimeEvent","bubbles":false,"cancelable":false};
-var reset = {"eventInterface":"Event","bubbles":true,"cancelable":true};
-var resize = {"eventInterface":"UIEvent","bubbles":false,"cancelable":false};
-var resourcetimingbufferfull = {"eventInterface":"Performance","bubbles":true,"cancelable":true};
-var result = {"eventInterface":"SpeechRecognitionEvent","bubbles":false,"cancelable":false};
-var resume = {"eventInterface":"SpeechSynthesisEvent","bubbles":false,"cancelable":false};
-var scroll = {"eventInterface":"UIEvent","bubbles":false,"cancelable":false};
-var seeked = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var seeking = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var select = {"eventInterface":"UIEvent","bubbles":true,"cancelable":false};
-var selectstart = {"eventInterface":"Event","bubbles":true,"cancelable":true};
-var selectionchange = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var show = {"eventInterface":"MouseEvent","bubbles":false,"cancelable":false};
-var slotchange = {"eventInterface":"Event","bubbles":true,"cancelable":false};
-var soundend = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var soundstart = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var speechend = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var speechstart = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var stalled = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var start = {"eventInterface":"SpeechSynthesisEvent","bubbles":false,"cancelable":false};
-var storage = {"eventInterface":"StorageEvent","bubbles":false,"cancelable":false};
-var submit = {"eventInterface":"Event","bubbles":true,"cancelable":true};
-var success = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var suspend = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var SVGAbort = {"eventInterface":"SVGEvent","bubbles":true,"cancelable":false};
-var SVGError = {"eventInterface":"SVGEvent","bubbles":true,"cancelable":false};
-var SVGLoad = {"eventInterface":"SVGEvent","bubbles":false,"cancelable":false};
-var SVGResize = {"eventInterface":"SVGEvent","bubbles":true,"cancelable":false};
-var SVGScroll = {"eventInterface":"SVGEvent","bubbles":true,"cancelable":false};
-var SVGUnload = {"eventInterface":"SVGEvent","bubbles":false,"cancelable":false};
-var SVGZoom = {"eventInterface":"SVGZoomEvent","bubbles":true,"cancelable":false};
-var timeout = {"eventInterface":"ProgressEvent","bubbles":false,"cancelable":false};
-var timeupdate = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var touchcancel = {"eventInterface":"TouchEvent","bubbles":true,"cancelable":false};
-var touchend = {"eventInterface":"TouchEvent","bubbles":true,"cancelable":true};
-var touchmove = {"eventInterface":"TouchEvent","bubbles":true,"cancelable":true};
-var touchstart = {"eventInterface":"TouchEvent","bubbles":true,"cancelable":true};
-var transitionend = {"eventInterface":"TransitionEvent","bubbles":true,"cancelable":true};
-var unload = {"eventInterface":"UIEvent","bubbles":false};
-var updateready = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var userproximity = {"eventInterface":"UserProximityEvent","bubbles":false,"cancelable":false};
-var voiceschanged = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var visibilitychange = {"eventInterface":"Event","bubbles":true,"cancelable":false};
-var volumechange = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var waiting = {"eventInterface":"Event","bubbles":false,"cancelable":false};
-var wheel = {"eventInterface":"WheelEvent","bubbles":true,"cancelable":true};
-var domEventTypes = {
-	abort: abort,
-	afterprint: afterprint,
-	animationend: animationend,
-	animationiteration: animationiteration,
-	animationstart: animationstart,
-	appinstalled: appinstalled,
-	audioprocess: audioprocess,
-	audioend: audioend,
-	audiostart: audiostart,
-	beforeprint: beforeprint,
-	beforeunload: beforeunload,
-	beginEvent: beginEvent,
-	blur: blur,
-	boundary: boundary,
-	cached: cached,
-	canplay: canplay,
-	canplaythrough: canplaythrough,
-	change: change,
-	chargingchange: chargingchange,
-	chargingtimechange: chargingtimechange,
-	checking: checking,
-	click: click,
-	close: close,
-	complete: complete,
-	compositionend: compositionend,
-	compositionstart: compositionstart,
-	compositionupdate: compositionupdate,
-	contextmenu: contextmenu,
-	copy: copy,
-	cut: cut,
-	dblclick: dblclick,
-	devicechange: devicechange,
-	devicelight: devicelight,
-	devicemotion: devicemotion,
-	deviceorientation: deviceorientation,
-	deviceproximity: deviceproximity,
-	dischargingtimechange: dischargingtimechange,
-	DOMActivate: DOMActivate,
-	DOMAttributeNameChanged: DOMAttributeNameChanged,
-	DOMAttrModified: DOMAttrModified,
-	DOMCharacterDataModified: DOMCharacterDataModified,
-	DOMContentLoaded: DOMContentLoaded,
-	DOMElementNameChanged: DOMElementNameChanged,
-	DOMFocusIn: DOMFocusIn,
-	DOMFocusOut: DOMFocusOut,
-	DOMNodeInserted: DOMNodeInserted,
-	DOMNodeInsertedIntoDocument: DOMNodeInsertedIntoDocument,
-	DOMNodeRemoved: DOMNodeRemoved,
-	DOMNodeRemovedFromDocument: DOMNodeRemovedFromDocument,
-	DOMSubtreeModified: DOMSubtreeModified,
-	downloading: downloading,
-	drag: drag,
-	dragend: dragend,
-	dragenter: dragenter,
-	dragleave: dragleave,
-	dragover: dragover,
-	dragstart: dragstart,
-	drop: drop,
-	durationchange: durationchange,
-	emptied: emptied,
-	end: end,
-	ended: ended,
-	endEvent: endEvent,
-	error: error,
-	focus: focus,
-	focusin: focusin,
-	focusout: focusout,
-	fullscreenchange: fullscreenchange,
-	fullscreenerror: fullscreenerror,
-	gamepadconnected: gamepadconnected,
-	gamepaddisconnected: gamepaddisconnected,
-	gotpointercapture: gotpointercapture,
-	hashchange: hashchange,
-	lostpointercapture: lostpointercapture,
-	input: input,
-	invalid: invalid,
-	keydown: keydown,
-	keypress: keypress,
-	keyup: keyup,
-	languagechange: languagechange,
-	levelchange: levelchange,
-	load: load,
-	loadeddata: loadeddata,
-	loadedmetadata: loadedmetadata,
-	loadend: loadend,
-	loadstart: loadstart,
-	mark: mark,
-	message: message,
-	messageerror: messageerror,
-	mousedown: mousedown,
-	mouseenter: mouseenter,
-	mouseleave: mouseleave,
-	mousemove: mousemove,
-	mouseout: mouseout,
-	mouseover: mouseover,
-	mouseup: mouseup,
-	nomatch: nomatch,
-	notificationclick: notificationclick,
-	noupdate: noupdate,
-	obsolete: obsolete,
-	offline: offline,
-	online: online,
-	open: open,
-	orientationchange: orientationchange,
-	pagehide: pagehide,
-	pageshow: pageshow,
-	paste: paste,
-	pause: pause,
-	pointercancel: pointercancel,
-	pointerdown: pointerdown,
-	pointerenter: pointerenter,
-	pointerleave: pointerleave,
-	pointerlockchange: pointerlockchange,
-	pointerlockerror: pointerlockerror,
-	pointermove: pointermove,
-	pointerout: pointerout,
-	pointerover: pointerover,
-	pointerup: pointerup,
-	play: play,
-	playing: playing,
-	popstate: popstate,
-	progress: progress,
-	push: push,
-	pushsubscriptionchange: pushsubscriptionchange,
-	ratechange: ratechange,
-	readystatechange: readystatechange,
-	repeatEvent: repeatEvent,
-	reset: reset,
-	resize: resize,
-	resourcetimingbufferfull: resourcetimingbufferfull,
-	result: result,
-	resume: resume,
-	scroll: scroll,
-	seeked: seeked,
-	seeking: seeking,
-	select: select,
-	selectstart: selectstart,
-	selectionchange: selectionchange,
-	show: show,
-	slotchange: slotchange,
-	soundend: soundend,
-	soundstart: soundstart,
-	speechend: speechend,
-	speechstart: speechstart,
-	stalled: stalled,
-	start: start,
-	storage: storage,
-	submit: submit,
-	success: success,
-	suspend: suspend,
-	SVGAbort: SVGAbort,
-	SVGError: SVGError,
-	SVGLoad: SVGLoad,
-	SVGResize: SVGResize,
-	SVGScroll: SVGScroll,
-	SVGUnload: SVGUnload,
-	SVGZoom: SVGZoom,
-	timeout: timeout,
-	timeupdate: timeupdate,
-	touchcancel: touchcancel,
-	touchend: touchend,
-	touchmove: touchmove,
-	touchstart: touchstart,
-	transitionend: transitionend,
-	unload: unload,
-	updateready: updateready,
-	userproximity: userproximity,
-	voiceschanged: voiceschanged,
-	visibilitychange: visibilitychange,
-	volumechange: volumechange,
-	waiting: waiting,
-	wheel: wheel
-};
-
-var domEventTypes$1 = Object.freeze({
-	abort: abort,
-	afterprint: afterprint,
-	animationend: animationend,
-	animationiteration: animationiteration,
-	animationstart: animationstart,
-	appinstalled: appinstalled,
-	audioprocess: audioprocess,
-	audioend: audioend,
-	audiostart: audiostart,
-	beforeprint: beforeprint,
-	beforeunload: beforeunload,
-	beginEvent: beginEvent,
-	blur: blur,
-	boundary: boundary,
-	cached: cached,
-	canplay: canplay,
-	canplaythrough: canplaythrough,
-	change: change,
-	chargingchange: chargingchange,
-	chargingtimechange: chargingtimechange,
-	checking: checking,
-	click: click,
-	close: close,
-	complete: complete,
-	compositionend: compositionend,
-	compositionstart: compositionstart,
-	compositionupdate: compositionupdate,
-	contextmenu: contextmenu,
-	copy: copy,
-	cut: cut,
-	dblclick: dblclick,
-	devicechange: devicechange,
-	devicelight: devicelight,
-	devicemotion: devicemotion,
-	deviceorientation: deviceorientation,
-	deviceproximity: deviceproximity,
-	dischargingtimechange: dischargingtimechange,
-	DOMActivate: DOMActivate,
-	DOMAttributeNameChanged: DOMAttributeNameChanged,
-	DOMAttrModified: DOMAttrModified,
-	DOMCharacterDataModified: DOMCharacterDataModified,
-	DOMContentLoaded: DOMContentLoaded,
-	DOMElementNameChanged: DOMElementNameChanged,
-	DOMFocusIn: DOMFocusIn,
-	DOMFocusOut: DOMFocusOut,
-	DOMNodeInserted: DOMNodeInserted,
-	DOMNodeInsertedIntoDocument: DOMNodeInsertedIntoDocument,
-	DOMNodeRemoved: DOMNodeRemoved,
-	DOMNodeRemovedFromDocument: DOMNodeRemovedFromDocument,
-	DOMSubtreeModified: DOMSubtreeModified,
-	downloading: downloading,
-	drag: drag,
-	dragend: dragend,
-	dragenter: dragenter,
-	dragleave: dragleave,
-	dragover: dragover,
-	dragstart: dragstart,
-	drop: drop,
-	durationchange: durationchange,
-	emptied: emptied,
-	end: end,
-	ended: ended,
-	endEvent: endEvent,
-	error: error,
-	focus: focus,
-	focusin: focusin,
-	focusout: focusout,
-	fullscreenchange: fullscreenchange,
-	fullscreenerror: fullscreenerror,
-	gamepadconnected: gamepadconnected,
-	gamepaddisconnected: gamepaddisconnected,
-	gotpointercapture: gotpointercapture,
-	hashchange: hashchange,
-	lostpointercapture: lostpointercapture,
-	input: input,
-	invalid: invalid,
-	keydown: keydown,
-	keypress: keypress,
-	keyup: keyup,
-	languagechange: languagechange,
-	levelchange: levelchange,
-	load: load,
-	loadeddata: loadeddata,
-	loadedmetadata: loadedmetadata,
-	loadend: loadend,
-	loadstart: loadstart,
-	mark: mark,
-	message: message,
-	messageerror: messageerror,
-	mousedown: mousedown,
-	mouseenter: mouseenter,
-	mouseleave: mouseleave,
-	mousemove: mousemove,
-	mouseout: mouseout,
-	mouseover: mouseover,
-	mouseup: mouseup,
-	nomatch: nomatch,
-	notificationclick: notificationclick,
-	noupdate: noupdate,
-	obsolete: obsolete,
-	offline: offline,
-	online: online,
-	open: open,
-	orientationchange: orientationchange,
-	pagehide: pagehide,
-	pageshow: pageshow,
-	paste: paste,
-	pause: pause,
-	pointercancel: pointercancel,
-	pointerdown: pointerdown,
-	pointerenter: pointerenter,
-	pointerleave: pointerleave,
-	pointerlockchange: pointerlockchange,
-	pointerlockerror: pointerlockerror,
-	pointermove: pointermove,
-	pointerout: pointerout,
-	pointerover: pointerover,
-	pointerup: pointerup,
-	play: play,
-	playing: playing,
-	popstate: popstate,
-	progress: progress,
-	push: push,
-	pushsubscriptionchange: pushsubscriptionchange,
-	ratechange: ratechange,
-	readystatechange: readystatechange,
-	repeatEvent: repeatEvent,
-	reset: reset,
-	resize: resize,
-	resourcetimingbufferfull: resourcetimingbufferfull,
-	result: result,
-	resume: resume,
-	scroll: scroll,
-	seeked: seeked,
-	seeking: seeking,
-	select: select,
-	selectstart: selectstart,
-	selectionchange: selectionchange,
-	show: show,
-	slotchange: slotchange,
-	soundend: soundend,
-	soundstart: soundstart,
-	speechend: speechend,
-	speechstart: speechstart,
-	stalled: stalled,
-	start: start,
-	storage: storage,
-	submit: submit,
-	success: success,
-	suspend: suspend,
-	SVGAbort: SVGAbort,
-	SVGError: SVGError,
-	SVGLoad: SVGLoad,
-	SVGResize: SVGResize,
-	SVGScroll: SVGScroll,
-	SVGUnload: SVGUnload,
-	SVGZoom: SVGZoom,
-	timeout: timeout,
-	timeupdate: timeupdate,
-	touchcancel: touchcancel,
-	touchend: touchend,
-	touchmove: touchmove,
-	touchstart: touchstart,
-	transitionend: transitionend,
-	unload: unload,
-	updateready: updateready,
-	userproximity: userproximity,
-	voiceschanged: voiceschanged,
-	visibilitychange: visibilitychange,
-	volumechange: volumechange,
-	waiting: waiting,
-	wheel: wheel,
-	default: domEventTypes
-});
-
-var require$$0 = ( domEventTypes$1 && domEventTypes ) || domEventTypes$1;
-
-var domEventTypes$2 = require$$0;
 
 var defaultEventType = {
   eventInterface: 'Event',
@@ -1717,7 +993,7 @@ function createDOMEvent (type, options) {
   var ref = type.split('.');
   var eventType = ref[0];
   var modifier = ref[1];
-  var ref$1 = domEventTypes$2[eventType] || defaultEventType;
+  var ref$1 = eventTypes[eventType] || defaultEventType;
   var eventInterface = ref$1.eventInterface;
   var bubbles = ref$1.bubbles;
   var cancelable = ref$1.cancelable;
@@ -1760,29 +1036,29 @@ var Wrapper = function Wrapper (
     // $FlowIgnore : issue with defineProperty
     Object.defineProperty(this, 'rootNode', {
       get: function () { return vnode || element; },
-      set: function () { return throwError('wrapper.vnode is read-only'); }
+      set: function () { return util.throwError('wrapper.vnode is read-only'); }
     });
     // $FlowIgnore
     Object.defineProperty(this, 'vnode', {
       get: function () { return vnode; },
-      set: function () { return throwError('wrapper.vnode is read-only'); }
+      set: function () { return util.throwError('wrapper.vnode is read-only'); }
     });
     // $FlowIgnore
     Object.defineProperty(this, 'element', {
       get: function () { return element; },
-      set: function () { return throwError('wrapper.element is read-only'); }
+      set: function () { return util.throwError('wrapper.element is read-only'); }
     });
     // $FlowIgnore
     Object.defineProperty(this, 'vm', {
       get: function () { return undefined; },
-      set: function () { return throwError('wrapper.vm is read-only'); }
+      set: function () { return util.throwError('wrapper.vm is read-only'); }
     });
   }
   var frozenOptions = Object.freeze(options);
   // $FlowIgnore
   Object.defineProperty(this, 'options', {
     get: function () { return frozenOptions; },
-    set: function () { return throwError('wrapper.options is read-only'); }
+    set: function () { return util.throwError('wrapper.options is read-only'); }
   });
   if (
     this.vnode &&
@@ -1793,7 +1069,7 @@ var Wrapper = function Wrapper (
 };
 
 Wrapper.prototype.at = function at () {
-  throwError('at() must be called on a WrapperArray');
+  util.throwError('at() must be called on a WrapperArray');
 };
 
 /**
@@ -1860,7 +1136,7 @@ Wrapper.prototype.contains = function contains (rawSelector) {
  */
 Wrapper.prototype.destroy = function destroy () {
   if (!this.isVueInstance()) {
-    throwError("wrapper.destroy() can only be called on a Vue instance");
+    util.throwError("wrapper.destroy() can only be called on a Vue instance");
   }
 
   if (this.element.parentNode) {
@@ -1877,7 +1153,7 @@ Wrapper.prototype.emitted = function emitted (
   event
 ) {
   if (!this._emitted && !this.vm) {
-    throwError("wrapper.emitted() can only be called on a Vue instance");
+    util.throwError("wrapper.emitted() can only be called on a Vue instance");
   }
   if (event) {
     return this._emitted[event]
@@ -1890,7 +1166,7 @@ Wrapper.prototype.emitted = function emitted (
  */
 Wrapper.prototype.emittedByOrder = function emittedByOrder () {
   if (!this._emittedByOrder && !this.vm) {
-    throwError(
+    util.throwError(
       "wrapper.emittedByOrder() can only be called on a Vue instance"
     );
   }
@@ -1908,7 +1184,7 @@ Wrapper.prototype.exists = function exists () {
 };
 
 Wrapper.prototype.filter = function filter () {
-  throwError('filter() must be called on a WrapperArray');
+  util.throwError('filter() must be called on a WrapperArray');
 };
 
 /**
@@ -1954,20 +1230,20 @@ Wrapper.prototype.findAll = function findAll (rawSelector) {
  * Checks if wrapper has an attribute with matching value
  */
 Wrapper.prototype.hasAttribute = function hasAttribute (attribute, value) {
-  warn(
+  util.warn(
     "hasAttribute() has been deprecated and will be " +
     "removed in version 1.0.0. Use attributes() " +
-    "instead—https://vue-test-utils.vuejs.org/api/wrapper/#attributes"
+    "instead—https://vue-test-utils.vuejs.org/api/wrapper/attributes.html"
   );
 
   if (typeof attribute !== 'string') {
-    throwError(
+    util.throwError(
       "wrapper.hasAttribute() must be passed attribute as a string"
     );
   }
 
   if (typeof value !== 'string') {
-    throwError(
+    util.throwError(
       "wrapper.hasAttribute() must be passed value as a string"
     );
   }
@@ -1981,15 +1257,15 @@ Wrapper.prototype.hasAttribute = function hasAttribute (attribute, value) {
 Wrapper.prototype.hasClass = function hasClass (className) {
     var this$1 = this;
 
-  warn(
+  util.warn(
     "hasClass() has been deprecated and will be removed " +
     "in version 1.0.0. Use classes() " +
-    "instead—https://vue-test-utils.vuejs.org/api/wrapper/#classes"
+    "instead—https://vue-test-utils.vuejs.org/api/wrapper/classes.html"
   );
   var targetClass = className;
 
   if (typeof targetClass !== 'string') {
-    throwError('wrapper.hasClass() must be passed a string');
+    util.throwError('wrapper.hasClass() must be passed a string');
   }
 
   // if $style is available and has a matching target, use that instead.
@@ -2008,17 +1284,17 @@ Wrapper.prototype.hasClass = function hasClass (className) {
  * Asserts wrapper has a prop name
  */
 Wrapper.prototype.hasProp = function hasProp (prop, value) {
-  warn(
+  util.warn(
     "hasProp() has been deprecated and will be removed " +
     "in version 1.0.0. Use props() " +
-    "instead—https://vue-test-utils.vuejs.org/api/wrapper/#props"
+    "instead—https://vue-test-utils.vuejs.org/api/wrapper/props.html"
   );
 
   if (!this.isVueInstance()) {
-    throwError('wrapper.hasProp() must be called on a Vue instance');
+    util.throwError('wrapper.hasProp() must be called on a Vue instance');
   }
   if (typeof prop !== 'string') {
-    throwError('wrapper.hasProp() must be passed prop as a string');
+    util.throwError('wrapper.hasProp() must be passed prop as a string');
   }
 
   // $props object does not exist in Vue 2.1.x, so use
@@ -2039,18 +1315,18 @@ Wrapper.prototype.hasProp = function hasProp (prop, value) {
  * Checks if wrapper has a style with value
  */
 Wrapper.prototype.hasStyle = function hasStyle (style, value) {
-  warn(
+  util.warn(
     "hasStyle() has been deprecated and will be removed " +
     "in version 1.0.0. Use wrapper.element.style " +
     "instead"
   );
 
   if (typeof style !== 'string') {
-    throwError("wrapper.hasStyle() must be passed style as a string");
+    util.throwError("wrapper.hasStyle() must be passed style as a string");
   }
 
   if (typeof value !== 'string') {
-    throwError('wrapper.hasClass() must be passed value as string');
+    util.throwError('wrapper.hasClass() must be passed value as string');
   }
 
   /* istanbul ignore next */
@@ -2059,7 +1335,7 @@ Wrapper.prototype.hasStyle = function hasStyle (style, value) {
     (navigator.userAgent.includes('node.js') ||
       navigator.userAgent.includes('jsdom'))
   ) {
-    warn(
+    util.warn(
       "wrapper.hasStyle is not fully supported when " +
       "running jsdom - only inline styles are supported"
     );
@@ -2099,7 +1375,7 @@ Wrapper.prototype.is = function is (rawSelector) {
   var selector = getSelector(rawSelector, 'is');
 
   if (selector.type === REF_SELECTOR) {
-    throwError('$ref selectors can not be used with wrapper.is()');
+    util.throwError('$ref selectors can not be used with wrapper.is()');
   }
 
   return matches(this.rootNode, selector)
@@ -2178,13 +1454,13 @@ Wrapper.prototype.props = function props (key) {
     var this$1 = this;
 
   if (this.isFunctionalComponent) {
-    throwError(
+    util.throwError(
       "wrapper.props() cannot be called on a mounted " +
         "functional component."
     );
   }
   if (!this.vm) {
-    throwError('wrapper.props() must be called on a Vue instance');
+    util.throwError('wrapper.props() must be called on a Vue instance');
   }
 
   var props = {};
@@ -2212,14 +1488,14 @@ Wrapper.prototype.setChecked = function setChecked (checked) {
     if ( checked === void 0 ) checked = true;
 
   if (typeof checked !== 'boolean') {
-    throwError('wrapper.setChecked() must be passed a boolean');
+    util.throwError('wrapper.setChecked() must be passed a boolean');
   }
   var tagName = this.element.tagName;
   // $FlowIgnore
   var type = this.attributes().type;
 
   if (tagName === 'SELECT') {
-    throwError(
+    util.throwError(
       "wrapper.setChecked() cannot be called on a " +
         "<select> element. Use wrapper.setSelected() " +
         "instead"
@@ -2236,7 +1512,7 @@ Wrapper.prototype.setChecked = function setChecked (checked) {
     }
   } else if (tagName === 'INPUT' && type === 'radio') {
     if (!checked) {
-      throwError(
+      util.throwError(
         "wrapper.setChecked() cannot be called with " +
           "parameter false on a <input type=\"radio\" /> " +
           "element."
@@ -2249,12 +1525,12 @@ Wrapper.prototype.setChecked = function setChecked (checked) {
       }
     }
   } else if (tagName === 'INPUT' || tagName === 'TEXTAREA') {
-    throwError(
+    util.throwError(
       "wrapper.setChecked() cannot be called on \"text\" " +
         "inputs. Use wrapper.setValue() instead"
     );
   } else {
-    throwError("wrapper.setChecked() cannot be called on this element");
+    util.throwError("wrapper.setChecked() cannot be called on this element");
   }
 };
 
@@ -2280,29 +1556,29 @@ Wrapper.prototype.setSelected = function setSelected () {
         .trigger('change');
     }
   } else if (tagName === 'SELECT') {
-    throwError(
+    util.throwError(
       "wrapper.setSelected() cannot be called on select. " +
         "Call it on one of its options"
     );
   } else if (tagName === 'INPUT' && type === 'checkbox') {
-    throwError(
+    util.throwError(
       "wrapper.setSelected() cannot be called on a <input " +
         "type=\"checkbox\" /> element. Use " +
         "wrapper.setChecked() instead"
     );
   } else if (tagName === 'INPUT' && type === 'radio') {
-    throwError(
+    util.throwError(
       "wrapper.setSelected() cannot be called on a <input " +
         "type=\"radio\" /> element. Use wrapper.setChecked() " +
         "instead"
     );
   } else if (tagName === 'INPUT' || tagName === 'TEXTAREA') {
-    throwError(
+    util.throwError(
       "wrapper.setSelected() cannot be called on \"text\" " +
         "inputs. Use wrapper.setValue() instead"
     );
   } else {
-    throwError("wrapper.setSelected() cannot be called on this element");
+    util.throwError("wrapper.setSelected() cannot be called on this element");
   }
 };
 
@@ -2313,13 +1589,13 @@ Wrapper.prototype.setComputed = function setComputed (computed) {
     var this$1 = this;
 
   if (!this.isVueInstance()) {
-    throwError(
+    util.throwError(
       "wrapper.setComputed() can only be called on a Vue " +
       "instance"
     );
   }
 
-  warn(
+  util.warn(
     "setComputed() has been deprecated and will be " +
       "removed in version 1.0.0. You can overwrite " +
       "computed properties by passing a computed object " +
@@ -2327,10 +1603,10 @@ Wrapper.prototype.setComputed = function setComputed (computed) {
   );
 
   Object.keys(computed).forEach(function (key) {
-    if (vueVersion > 2.1) {
+    if (util.vueVersion > 2.1) {
       // $FlowIgnore : Problem with possibly null this.vm
       if (!this$1.vm._computedWatchers[key]) {
-        throwError(
+        util.throwError(
           "wrapper.setComputed() was passed a value that " +
           "does not exist as a computed property on the " +
           "Vue instance. Property " + key + " does not exist " +
@@ -2358,7 +1634,7 @@ Wrapper.prototype.setComputed = function setComputed (computed) {
 
       // $FlowIgnore : Problem with possibly null this.vm
       if (!isStore && !this$1.vm._watchers.some(function (w) { return w.getter.name === key; })) {
-        throwError(
+        util.throwError(
           "wrapper.setComputed() was passed a value that does " +
           "not exist as a computed property on the Vue instance. " +
           "Property " + key + " does not exist on the Vue instance"
@@ -2384,14 +1660,14 @@ Wrapper.prototype.setComputed = function setComputed (computed) {
  */
 Wrapper.prototype.setData = function setData (data) {
   if (this.isFunctionalComponent) {
-    throwError(
+    util.throwError(
       "wrapper.setData() cannot be called on a functional " +
       "component"
     );
   }
 
   if (!this.vm) {
-    throwError(
+    util.throwError(
       "wrapper.setData() can only be called on a Vue " +
       "instance"
     );
@@ -2407,7 +1683,7 @@ Wrapper.prototype.setMethods = function setMethods (methods) {
     var this$1 = this;
 
   if (!this.isVueInstance()) {
-    throwError(
+    util.throwError(
       "wrapper.setMethods() can only be called on a Vue " +
       "instance"
     );
@@ -2434,13 +1710,13 @@ Wrapper.prototype.setProps = function setProps (data) {
   var originalConfig = Vue.config.silent;
   Vue.config.silent = config.silent;
   if (this.isFunctionalComponent) {
-    throwError(
+    util.throwError(
       "wrapper.setProps() cannot be called on a " +
       "functional component"
     );
   }
   if (!this.vm) {
-    throwError(
+    util.throwError(
       "wrapper.setProps() can only be called on a Vue " +
       "instance"
     );
@@ -2453,7 +1729,7 @@ Wrapper.prototype.setProps = function setProps (data) {
       // $FlowIgnore : Problem with possibly null this.vm
       data[key] === this$1.vm[key]
     ) {
-      throwError(
+      util.throwError(
         "wrapper.setProps() called with the same object " +
         "of the existing " + key + " property. " +
         "You must call wrapper.setProps() with a new object " +
@@ -2465,12 +1741,12 @@ Wrapper.prototype.setProps = function setProps (data) {
       !this$1.vm.$options._propKeys ||
       !this$1.vm.$options._propKeys.some(function (prop) { return prop === key; })
     ) {
-      if (vueVersion > 2.3) {
+      if (util.vueVersion > 2.3) {
         // $FlowIgnore : Problem with possibly null this.vm
         this$1.vm.$attrs[key] = data[key];
         return
       }
-      throwError(
+      util.throwError(
         "wrapper.setProps() called with " + key + " property which " +
         "is not defined on the component"
       );
@@ -2510,18 +1786,18 @@ Wrapper.prototype.setValue = function setValue (value) {
     this.element.value = value;
     this.trigger('change');
   } else if (tagName === 'OPTION') {
-    throwError(
+    util.throwError(
       "wrapper.setValue() cannot be called on an <option> " +
         "element. Use wrapper.setSelected() instead"
     );
   } else if (tagName === 'INPUT' && type === 'checkbox') {
-    throwError(
+    util.throwError(
       "wrapper.setValue() cannot be called on a <input " +
         "type=\"checkbox\" /> element. Use " +
         "wrapper.setChecked() instead"
     );
   } else if (tagName === 'INPUT' && type === 'radio') {
-    throwError(
+    util.throwError(
       "wrapper.setValue() cannot be called on a <input " +
         "type=\"radio\" /> element. Use wrapper.setChecked() " +
         "instead"
@@ -2531,7 +1807,7 @@ Wrapper.prototype.setValue = function setValue (value) {
     this.element.value = value;
     this.trigger('input');
   } else {
-    throwError("wrapper.setValue() cannot be called on this element");
+    util.throwError("wrapper.setValue() cannot be called on this element");
   }
 };
 
@@ -2549,11 +1825,11 @@ Wrapper.prototype.trigger = function trigger (type, options) {
     if ( options === void 0 ) options = {};
 
   if (typeof type !== 'string') {
-    throwError('wrapper.trigger() must be passed a string');
+    util.throwError('wrapper.trigger() must be passed a string');
   }
 
   if (options.target) {
-    throwError(
+    util.throwError(
       "you cannot set the target value of an event. See " +
         "the notes section of the docs for more " +
         "details—https://vue-test-utils.vuejs.org/api/wrapper/trigger.html"
@@ -2574,7 +1850,7 @@ Wrapper.prototype.trigger = function trigger (type, options) {
 };
 
 Wrapper.prototype.update = function update () {
-  warn(
+  util.warn(
     "update has been removed from vue-test-utils. All " +
     "updates are now synchronous by default"
   );
@@ -2585,7 +1861,7 @@ Wrapper.prototype.update = function update () {
  * element has display: none or visibility: hidden style.
  */
 Wrapper.prototype.visible = function visible () {
-  warn(
+  util.warn(
     "visible has been deprecated and will be removed in " +
     "version 1, use isVisible instead"
   );
@@ -2650,7 +1926,7 @@ function setWatchersToSync (vm) {
 
 // 
 
-var VueWrapper = (function (Wrapper$$1) {
+var VueWrapper = /*@__PURE__*/(function (Wrapper$$1) {
   function VueWrapper (vm, options) {
     var this$1 = this;
 
@@ -2658,22 +1934,22 @@ var VueWrapper = (function (Wrapper$$1) {
     // $FlowIgnore : issue with defineProperty
     Object.defineProperty(this, 'rootNode', {
       get: function () { return vm.$vnode || { child: this$1.vm }; },
-      set: function () { return throwError('wrapper.vnode is read-only'); }
+      set: function () { return util.throwError('wrapper.vnode is read-only'); }
     });
     // $FlowIgnore : issue with defineProperty
     Object.defineProperty(this, 'vnode', {
       get: function () { return vm._vnode; },
-      set: function () { return throwError('wrapper.vnode is read-only'); }
+      set: function () { return util.throwError('wrapper.vnode is read-only'); }
     });
     // $FlowIgnore
     Object.defineProperty(this, 'element', {
       get: function () { return vm.$el; },
-      set: function () { return throwError('wrapper.element is read-only'); }
+      set: function () { return util.throwError('wrapper.element is read-only'); }
     });
     // $FlowIgnore
     Object.defineProperty(this, 'vm', {
       get: function () { return vm; },
-      set: function () { return throwError('wrapper.vm is read-only'); }
+      set: function () { return util.throwError('wrapper.vm is read-only'); }
     });
     if (options.sync) {
       setWatchersToSync(vm);
@@ -2690,791 +1966,6 @@ var VueWrapper = (function (Wrapper$$1) {
 
   return VueWrapper;
 }(Wrapper));
-
-// 
-
-function createVNodes (
-  vm,
-  slotValue,
-  name
-) {
-  var el = vueTemplateCompiler.compileToFunctions(
-    ("<div><template slot=" + name + ">" + slotValue + "</template></div>")
-  );
-  var _staticRenderFns = vm._renderProxy.$options.staticRenderFns;
-  var _staticTrees = vm._renderProxy._staticTrees;
-  vm._renderProxy._staticTrees = [];
-  vm._renderProxy.$options.staticRenderFns = el.staticRenderFns;
-  var vnode = el.render.call(vm._renderProxy, vm.$createElement);
-  vm._renderProxy.$options.staticRenderFns = _staticRenderFns;
-  vm._renderProxy._staticTrees = _staticTrees;
-  return vnode.children[0]
-}
-
-function createVNodesForSlot (
-  vm,
-  slotValue,
-  name
-) {
-  if (typeof slotValue === 'string') {
-    return createVNodes(vm, slotValue, name)
-  }
-  var vnode = vm.$createElement(slotValue)
-  ;(vnode.data || (vnode.data = {})).slot = name;
-  return vnode
-}
-
-function createSlotVNodes (
-  vm,
-  slots
-) {
-  return Object.keys(slots).reduce(function (acc, key) {
-    var content = slots[key];
-    if (Array.isArray(content)) {
-      var nodes = content.map(
-        function (slotDef) { return createVNodesForSlot(vm, slotDef, key); }
-      );
-      return acc.concat(nodes)
-    }
-
-    return acc.concat(createVNodesForSlot(vm, content, key))
-  }, [])
-}
-
-// 
-
-function addMocks (
-  _Vue,
-  mockedProperties
-) {
-  if ( mockedProperties === void 0 ) mockedProperties = {};
-
-  if (mockedProperties === false) {
-    return
-  }
-  Object.keys(mockedProperties).forEach(function (key) {
-    try {
-      // $FlowIgnore
-      _Vue.prototype[key] = mockedProperties[key];
-    } catch (e) {
-      warn(
-        "could not overwrite property " + key + ", this is " +
-        "usually caused by a plugin that has added " +
-        "the property as a read-only value"
-      );
-    }
-    // $FlowIgnore
-    Vue.util.defineReactive(_Vue, key, mockedProperties[key]);
-  });
-}
-
-// This is used instead of Vue.mixin. The reason is that
-// Vue.mixin is slower, and remove modified options
-// https://github.com/vuejs/vue/issues/8710
-
-function addHook (options, hook, fn) {
-  if (options[hook] && !Array.isArray(options[hook])) {
-    options[hook] = [options[hook]];
-  }
-  (options[hook] || (options[hook] = [])).push(fn);
-}
-
-// 
-
-function logEvents (
-  vm,
-  emitted,
-  emittedByOrder
-) {
-  var emit = vm.$emit;
-  vm.$emit = function (name) {
-    var args = [], len = arguments.length - 1;
-    while ( len-- > 0 ) args[ len ] = arguments[ len + 1 ];
-
-    (emitted[name] || (emitted[name] = [])).push(args);
-    emittedByOrder.push({ name: name, args: args });
-    return emit.call.apply(emit, [ vm, name ].concat( args ))
-  };
-}
-
-function addEventLogger (_Vue) {
-  addHook(_Vue.options, 'beforeCreate', function () {
-    this.__emitted = Object.create(null);
-    this.__emittedByOrder = [];
-    logEvents(this, this.__emitted, this.__emittedByOrder);
-  }
-  );
-}
-
-function addStubs (_Vue, stubComponents) {
-  function addStubComponentsMixin () {
-    Object.assign(this.$options.components, stubComponents);
-  }
-
-  addHook(_Vue.options, 'beforeMount', addStubComponentsMixin);
-  // beforeCreate is for components created in node, which
-  // never mount
-  addHook(_Vue.options, 'beforeCreate', addStubComponentsMixin);
-}
-
-// 
-
-function compileFromString (str) {
-  if (!vueTemplateCompiler.compileToFunctions) {
-    throwError(
-      "vueTemplateCompiler is undefined, you must pass " +
-        "precompiled components if vue-template-compiler is " +
-        "undefined"
-    );
-  }
-  return vueTemplateCompiler.compileToFunctions(str)
-}
-
-function compileTemplate (component) {
-  if (component.template) {
-    Object.assign(component, vueTemplateCompiler.compileToFunctions(component.template));
-  }
-
-  if (component.components) {
-    Object.keys(component.components).forEach(function (c) {
-      var cmp = component.components[c];
-      if (!cmp.render) {
-        compileTemplate(cmp);
-      }
-    });
-  }
-
-  if (component.extends) {
-    compileTemplate(component.extends);
-  }
-
-  if (component.extendOptions && !component.options.render) {
-    compileTemplate(component.options);
-  }
-}
-
-function compileTemplateForSlots (slots) {
-  Object.keys(slots).forEach(function (key) {
-    var slot = Array.isArray(slots[key]) ? slots[key] : [slots[key]];
-    slot.forEach(function (slotValue) {
-      if (componentNeedsCompiling(slotValue)) {
-        compileTemplate(slotValue);
-      }
-    });
-  });
-}
-
-// 
-
-var MOUNTING_OPTIONS = [
-  'attachToDocument',
-  'mocks',
-  'slots',
-  'localVue',
-  'stubs',
-  'context',
-  'clone',
-  'attrs',
-  'listeners',
-  'propsData',
-  'logModifiedComponents',
-  'sync',
-  'shouldProxy'
-];
-
-function extractInstanceOptions (
-  options
-) {
-  var instanceOptions = Object.assign({}, options);
-  MOUNTING_OPTIONS.forEach(function (mountingOption) {
-    delete instanceOptions[mountingOption];
-  });
-  return instanceOptions
-}
-
-// 
-
-function isValidSlot (slot) {
-  return (
-    isVueComponent(slot) ||
-    typeof slot === 'string'
-  )
-}
-
-function requiresTemplateCompiler (slot) {
-  if (typeof slot === 'string' && !vueTemplateCompiler.compileToFunctions) {
-    throwError(
-      "vueTemplateCompiler is undefined, you must pass " +
-      "precompiled components if vue-template-compiler is " +
-      "undefined"
-    );
-  }
-}
-
-function validateSlots (slots) {
-  Object.keys(slots).forEach(function (key) {
-    var slot = Array.isArray(slots[key]) ? slots[key] : [slots[key]];
-
-    slot.forEach(function (slotValue) {
-      if (!isValidSlot(slotValue)) {
-        throwError(
-          "slots[key] must be a Component, string or an array " +
-            "of Components"
-        );
-      }
-      requiresTemplateCompiler(slotValue);
-    });
-  });
-}
-
-// 
-
-function isDestructuringSlotScope (slotScope) {
-  return slotScope[0] === '{' && slotScope[slotScope.length - 1] === '}'
-}
-
-function getVueTemplateCompilerHelpers () {
-  var vue = new Vue();
-  var helpers = {};
-  var names = [
-    '_c',
-    '_o',
-    '_n',
-    '_s',
-    '_l',
-    '_t',
-    '_q',
-    '_i',
-    '_m',
-    '_f',
-    '_k',
-    '_b',
-    '_v',
-    '_e',
-    '_u',
-    '_g'
-  ];
-  names.forEach(function (name) {
-    helpers[name] = vue._renderProxy[name];
-  });
-  helpers.$createElement = vue._renderProxy.$createElement;
-  return helpers
-}
-
-function validateEnvironment () {
-  if (vueVersion < 2.1) {
-    throwError("the scopedSlots option is only supported in vue@2.1+.");
-  }
-}
-
-var slotScopeRe = /<[^>]+ slot-scope=\"(.+)\"/;
-
-// Hide warning about <template> disallowed as root element
-function customWarn (msg) {
-  if (msg.indexOf('Cannot use <template> as component root element') === -1) {
-    console.error(msg);
-  }
-}
-
-function createScopedSlots (
-  scopedSlotsOption
-) {
-  var scopedSlots = {};
-  if (!scopedSlotsOption) {
-    return scopedSlots
-  }
-  validateEnvironment();
-  var helpers = getVueTemplateCompilerHelpers();
-  var loop = function ( scopedSlotName ) {
-    var slot = scopedSlotsOption[scopedSlotName];
-    var isFn = typeof slot === 'function';
-    // Type check to silence flow (can't use isFn)
-    var renderFn = typeof slot === 'function'
-      ? slot
-      : vueTemplateCompiler.compileToFunctions(slot, { warn: customWarn }).render;
-
-    var hasSlotScopeAttr = !isFn && slot.match(slotScopeRe);
-    var slotScope = hasSlotScopeAttr && hasSlotScopeAttr[1];
-    scopedSlots[scopedSlotName] = function (props) {
-      var obj;
-
-      var res;
-      if (isFn) {
-        res = renderFn.call(Object.assign({}, helpers), props);
-      } else if (slotScope && !isDestructuringSlotScope(slotScope)) {
-        res = renderFn.call(Object.assign({}, helpers, ( obj = {}, obj[slotScope] = props, obj)));
-      } else if (slotScope && isDestructuringSlotScope(slotScope)) {
-        res = renderFn.call(Object.assign({}, helpers, props));
-      } else {
-        res = renderFn.call(Object.assign({}, helpers, {props: props}));
-      }
-      // res is Array if <template> is a root element
-      return Array.isArray(res) ? res[0] : res
-    };
-  };
-
-  for (var scopedSlotName in scopedSlotsOption) loop( scopedSlotName );
-  return scopedSlots
-}
-
-// 
-
-function createFunctionalComponent (
-  component,
-  mountingOptions
-) {
-  if (mountingOptions.context && typeof mountingOptions.context !== 'object') {
-    throwError('mount.context must be an object');
-  }
-  if (mountingOptions.slots) {
-    validateSlots(mountingOptions.slots);
-  }
-
-  var context =
-    mountingOptions.context ||
-    component.FunctionalRenderContext ||
-    {};
-
-  var listeners = mountingOptions.listeners;
-
-  if (listeners) {
-    Object.keys(listeners).forEach(function (key) {
-      context.on[key] = listeners[key];
-    });
-  }
-
-  context.scopedSlots = createScopedSlots(mountingOptions.scopedSlots);
-
-  return {
-    render: function render (h) {
-      return h(
-        component,
-        context,
-        (mountingOptions.context &&
-          mountingOptions.context.children &&
-          mountingOptions.context.children.map(
-            function (x) { return (typeof x === 'function' ? x(h) : x); }
-          )) ||
-          createSlotVNodes(this, mountingOptions.slots || {})
-      )
-    },
-    name: component.name,
-    _isFunctionalContainer: true
-  }
-}
-
-// 
-
-function isVueComponentStub (comp) {
-  return comp && comp.template || isVueComponent(comp)
-}
-
-function isValidStub (stub) {
-  return (
-    typeof stub === 'boolean' ||
-    (!!stub && typeof stub === 'string') ||
-    isVueComponentStub(stub)
-  )
-}
-
-function resolveComponent$1 (obj, component) {
-  return obj[component] ||
-    obj[hyphenate(component)] ||
-    obj[camelize(component)] ||
-    obj[capitalize(camelize(component))] ||
-    obj[capitalize(component)] ||
-    {}
-}
-
-function getCoreProperties (componentOptions) {
-  return {
-    attrs: componentOptions.attrs,
-    name: componentOptions.name,
-    on: componentOptions.on,
-    key: componentOptions.key,
-    ref: componentOptions.ref,
-    props: componentOptions.props,
-    domProps: componentOptions.domProps,
-    class: componentOptions.class,
-    staticClass: componentOptions.staticClass,
-    staticStyle: componentOptions.staticStyle,
-    style: componentOptions.style,
-    normalizedStyle: componentOptions.normalizedStyle,
-    nativeOn: componentOptions.nativeOn,
-    functional: componentOptions.functional
-  }
-}
-
-function createClassString (staticClass, dynamicClass) {
-  if (staticClass && dynamicClass) {
-    return staticClass + ' ' + dynamicClass
-  }
-  return staticClass || dynamicClass
-}
-
-function createStubFromComponent (
-  originalComponent,
-  name
-) {
-  var componentOptions =
-    typeof originalComponent === 'function' && originalComponent.cid
-      ? originalComponent.extendOptions
-      : originalComponent;
-
-  var tagName = (name || 'anonymous') + "-stub";
-
-  // ignoreElements does not exist in Vue 2.0.x
-  if (Vue.config.ignoredElements) {
-    Vue.config.ignoredElements.push(tagName);
-  }
-
-  return Object.assign({}, getCoreProperties(componentOptions),
-    {$_vueTestUtils_original: originalComponent,
-    $_doNotStubChildren: true,
-    render: function render (h, context) {
-      return h(
-        tagName,
-        {
-          attrs: componentOptions.functional ? Object.assign({}, context.props,
-            context.data.attrs,
-            {class: createClassString(
-              context.data.staticClass,
-              context.data.class
-            )}) : Object.assign({}, this.$props)
-        },
-        context ? context.children : this.$options._renderChildren
-      )
-    }})
-}
-
-function createStubFromString (
-  templateString,
-  originalComponent,
-  name
-) {
-  if ( originalComponent === void 0 ) originalComponent = {};
-
-  if (templateContainsComponent(templateString, name)) {
-    throwError('options.stub cannot contain a circular reference');
-  }
-
-  var componentOptions =
-    typeof originalComponent === 'function' && originalComponent.cid
-      ? originalComponent.extendOptions
-      : originalComponent;
-
-  return Object.assign({}, getCoreProperties(componentOptions),
-    {$_doNotStubChildren: true},
-    compileFromString(templateString))
-}
-
-function validateStub (stub) {
-  if (!isValidStub(stub)) {
-    throwError(
-      "options.stub values must be passed a string or " +
-      "component"
-    );
-  }
-}
-
-function createStubsFromStubsObject (
-  originalComponents,
-  stubs
-) {
-  if ( originalComponents === void 0 ) originalComponents = {};
-
-  return Object.keys(stubs || {}).reduce(function (acc, stubName) {
-    var stub = stubs[stubName];
-
-    validateStub(stub);
-
-    if (stub === false) {
-      return acc
-    }
-
-    if (stub === true) {
-      var component = resolveComponent$1(originalComponents, stubName);
-      acc[stubName] = createStubFromComponent(component, stubName);
-      return acc
-    }
-
-    if (typeof stub === 'string') {
-      var component$1 = resolveComponent$1(originalComponents, stubName);
-      acc[stubName] = createStubFromString(
-        stub,
-        component$1,
-        stubName
-      );
-      return acc
-    }
-
-    if (componentNeedsCompiling(stub)) {
-      compileTemplate(stub);
-    }
-    var name = originalComponents[stubName] &&
-    originalComponents[stubName].name;
-
-    acc[stubName] = Object.assign({}, {name: name},
-      stub);
-
-    return acc
-  }, {})
-}
-
-var isWhitelisted = function (el, whitelist) { return resolveComponent(el, whitelist); };
-var isAlreadyStubbed = function (el, stubs) { return stubs.has(el); };
-var isDynamicComponent = function (cmp) { return typeof cmp === 'function' && !cmp.cid; };
-
-var CREATE_ELEMENT_ALIAS = semVerGreaterThan(Vue.version, '2.1.5')
-  ? '_c'
-  : '_h';
-var LIFECYCLE_HOOK = semVerGreaterThan(Vue.version, '2.1.8')
-  ? 'beforeCreate'
-  : 'beforeMount';
-
-function shouldExtend (component, _Vue) {
-  return (
-    (typeof component === 'function' && !isDynamicComponent(component)) ||
-    (component && component.extends)
-  )
-}
-
-function extend (component, _Vue) {
-  var stub = _Vue.extend(component.options);
-  stub.options.$_vueTestUtils_original = component;
-  return stub
-}
-
-function createStubIfNeeded (shouldStub, component, _Vue, el) {
-  if (shouldStub) {
-    return createStubFromComponent(component || {}, el)
-  }
-
-  if (shouldExtend(component, _Vue)) {
-    return extend(component, _Vue)
-  }
-}
-
-function shouldNotBeStubbed (el, whitelist, modifiedComponents) {
-  return (
-    (typeof el === 'string' && isReservedTag(el)) ||
-    isWhitelisted(el, whitelist) ||
-    isAlreadyStubbed(el, modifiedComponents)
-  )
-}
-
-function isConstructor (el) {
-  return typeof el === 'function'
-}
-
-function patchRender (_Vue, stubs, stubAllComponents) {
-  // This mixin patches vm.$createElement so that we can stub all components
-  // before they are rendered in shallow mode. We also need to ensure that
-  // component constructors were created from the _Vue constructor. If not,
-  // we must replace them with components created from the _Vue constructor
-  // before calling the original $createElement. This ensures that components
-  // have the correct instance properties and stubs when they are rendered.
-  function patchRenderMixin () {
-    var vm = this;
-
-    if (vm.$options.$_doNotStubChildren || vm._isFunctionalContainer) {
-      return
-    }
-
-    var modifiedComponents = new Set();
-    var originalCreateElement = vm.$createElement;
-    var originalComponents = vm.$options.components;
-
-    var createElement = function (el) {
-      var obj;
-
-      var args = [], len = arguments.length - 1;
-      while ( len-- > 0 ) args[ len ] = arguments[ len + 1 ];
-      if (shouldNotBeStubbed(el, stubs, modifiedComponents)) {
-        return originalCreateElement.apply(void 0, [ el ].concat( args ))
-      }
-
-      if (isConstructor(el)) {
-        if (stubAllComponents) {
-          var stub = createStubFromComponent(el, el.name || 'anonymous');
-          return originalCreateElement.apply(void 0, [ stub ].concat( args ))
-        }
-
-        var Constructor = shouldExtend(el, _Vue) ? extend(el, _Vue) : el;
-
-        return originalCreateElement.apply(void 0, [ Constructor ].concat( args ))
-      }
-
-      if (typeof el === 'string') {
-        var original = resolveComponent(el, originalComponents);
-
-        if (
-          original &&
-          original.options &&
-          original.options.$_vueTestUtils_original
-        ) {
-          original = original.options.$_vueTestUtils_original;
-        }
-
-        if (isDynamicComponent(original)) {
-          return originalCreateElement.apply(void 0, [ el ].concat( args ))
-        }
-
-        var stub$1 = createStubIfNeeded(stubAllComponents, original, _Vue, el);
-
-        if (stub$1) {
-          vm.$options.components = Object.assign({}, vm.$options.components,
-            ( obj = {}, obj[el] = stub$1, obj));
-          modifiedComponents.add(el);
-        }
-      }
-
-      return originalCreateElement.apply(void 0, [ el ].concat( args ))
-    };
-
-    vm[CREATE_ELEMENT_ALIAS] = createElement;
-    vm.$createElement = createElement;
-  }
-
-  addHook(_Vue.options, LIFECYCLE_HOOK, patchRenderMixin);
-}
-
-// 
-
-function vueExtendUnsupportedOption (option) {
-  return "options." + option + " is not supported for " +
-  "components created with Vue.extend in Vue < 2.3. " +
-  "You can set " + option + " to false to mount the component."
-}
-
-// these options aren't supported if Vue is version < 2.3
-// for components using Vue.extend. This is due to a bug
-// that means the mixins we use to add properties are not applied
-// correctly
-var UNSUPPORTED_VERSION_OPTIONS = [
-  'mocks',
-  'stubs',
-  'localVue'
-];
-
-function createInstance (
-  component,
-  options,
-  _Vue
-) {
-  // make sure all extends are based on this instance
-  _Vue.options._base = _Vue;
-
-  if (
-    vueVersion < 2.3 &&
-    typeof component === 'function' &&
-    component.options
-  ) {
-    UNSUPPORTED_VERSION_OPTIONS.forEach(function (option) {
-      if (options[option]) {
-        throwError(vueExtendUnsupportedOption(option));
-      }
-    });
-  }
-
-  // instance options are options that are passed to the
-  // root instance when it's instantiated
-  var instanceOptions = extractInstanceOptions(options);
-  var stubComponentsObject = createStubsFromStubsObject(
-    component.components,
-    // $FlowIgnore
-    options.stubs
-  );
-
-  addEventLogger(_Vue);
-  addMocks(_Vue, options.mocks);
-  addStubs(_Vue, stubComponentsObject);
-  patchRender(_Vue, stubComponentsObject, options.shouldProxy);
-
-  if (
-    (component.options && component.options.functional) ||
-    component.functional
-  ) {
-    component = createFunctionalComponent(component, options);
-  } else if (options.context) {
-    throwError(
-      "mount.context can only be used when mounting a " +
-      "functional component"
-    );
-  }
-
-  if (componentNeedsCompiling(component)) {
-    compileTemplate(component);
-  }
-
-  if (component.options) {
-    component.options._base = _Vue;
-  }
-
-  // extend component from _Vue to add properties and mixins
-  // extend does not work correctly for sub class components in Vue < 2.2
-  var Constructor = typeof component === 'function'
-    ? _Vue.extend(component.options).extend(instanceOptions)
-    : _Vue.extend(component).extend(instanceOptions);
-
-  // used to identify extended component using constructor
-  Constructor.options.$_vueTestUtils_original = component;
-
-  if (options.slots) {
-    compileTemplateForSlots(options.slots);
-    // validate slots outside of the createSlots function so
-    // that we can throw an error without it being caught by
-    // the Vue error handler
-    // $FlowIgnore
-    validateSlots(options.slots);
-  }
-
-  // Objects are not resolved in extended components in Vue < 2.5
-  // https://github.com/vuejs/vue/issues/6436
-  if (
-    options.provide &&
-    typeof options.provide === 'object' &&
-    vueVersion < 2.5
-  ) {
-    var obj = Object.assign({}, options.provide);
-    options.provide = function () { return obj; };
-  }
-
-  var scopedSlots = createScopedSlots(options.scopedSlots);
-
-  if (options.parentComponent && !isPlainObject(options.parentComponent)) {
-    throwError(
-      "options.parentComponent should be a valid Vue component " +
-      "options object"
-    );
-  }
-
-  var parentComponentOptions = options.parentComponent || {};
-  parentComponentOptions.provide = options.provide;
-  parentComponentOptions.$_doNotStubChildren = true;
-
-  parentComponentOptions.render = function (h) {
-    var slots = options.slots
-      ? createSlotVNodes(this, options.slots)
-      : undefined;
-    return h(
-      Constructor,
-      {
-        ref: 'vm',
-        on: options.listeners,
-        attrs: Object.assign({}, options.attrs,
-          // pass as attrs so that inheritAttrs works correctly
-          // propsData should take precedence over attrs
-          options.propsData),
-        scopedSlots: scopedSlots
-      },
-      slots
-    )
-  };
-  var Parent = _Vue.extend(parentComponentOptions);
-
-  return new Parent()
-}
 
 // 
 
@@ -3505,64 +1996,11 @@ function errorHandler (
   throw error
 }
 
-function normalizeStubs (stubs) {
-  if ( stubs === void 0 ) stubs = {};
-
-  if (stubs === false) {
-    return false
-  }
-  if (isPlainObject(stubs)) {
-    return stubs
-  }
-  if (Array.isArray(stubs)) {
-    return stubs.reduce(function (acc, stub) {
-      if (typeof stub !== 'string') {
-        throwError('each item in an options.stubs array must be a string');
-      }
-      acc[stub] = true;
-      return acc
-    }, {})
-  }
-  throwError('options.stubs must be an object or an Array');
-}
-
-// 
-
-function getOption (option, config) {
-  if (option === false) {
-    return false
-  }
-  if (option || (config && Object.keys(config).length > 0)) {
-    if (option instanceof Function) {
-      return option
-    }
-    if (config instanceof Function) {
-      throw new Error("Config can't be a Function.")
-    }
-    return Object.assign({}, config,
-      option)
-  }
-}
-
-function mergeOptions (options, config) {
-  var mocks = (getOption(options.mocks, config.mocks));
-  var methods = (
-    (getOption(options.methods, config.methods)));
-  var provide = ((getOption(options.provide, config.provide)));
-  return Object.assign({}, options,
-    {logModifiedComponents: config.logModifiedComponents,
-    stubs: getOption(normalizeStubs(options.stubs), config.stubs),
-    mocks: mocks,
-    methods: methods,
-    provide: provide,
-    sync: !!(options.sync || options.sync === undefined)})
-}
-
 // 
 
 function warnIfNoWindow () {
   if (typeof window === 'undefined') {
-    throwError(
+    util.throwError(
       "window is undefined, vue-test-utils needs to be " +
       "run in a browser environment. \n" +
       "You can run the tests in node using jsdom \n" +
@@ -3744,15 +2182,13 @@ var _listCacheSet = listCacheSet;
  * @param {Array} [entries] The key-value pairs to cache.
  */
 function ListCache(entries) {
-  var this$1 = this;
-
   var index = -1,
       length = entries == null ? 0 : entries.length;
 
   this.clear();
   while (++index < length) {
     var entry = entries[index];
-    this$1.set(entry[0], entry[1]);
+    this.set(entry[0], entry[1]);
   }
 }
 
@@ -3856,7 +2292,7 @@ var _Symbol = Symbol;
 var objectProto = Object.prototype;
 
 /** Used to check objects for own properties. */
-var hasOwnProperty$1 = objectProto.hasOwnProperty;
+var hasOwnProperty = objectProto.hasOwnProperty;
 
 /**
  * Used to resolve the
@@ -3876,7 +2312,7 @@ var symToStringTag = _Symbol ? _Symbol.toStringTag : undefined;
  * @returns {string} Returns the raw `toStringTag`.
  */
 function getRawTag(value) {
-  var isOwn = hasOwnProperty$1.call(value, symToStringTag),
+  var isOwn = hasOwnProperty.call(value, symToStringTag),
       tag = value[symToStringTag];
 
   try {
@@ -4080,11 +2516,11 @@ var funcProto$1 = Function.prototype,
 var funcToString$1 = funcProto$1.toString;
 
 /** Used to check objects for own properties. */
-var hasOwnProperty$2 = objectProto$2.hasOwnProperty;
+var hasOwnProperty$1 = objectProto$2.hasOwnProperty;
 
 /** Used to detect if a method is native. */
 var reIsNative = RegExp('^' +
-  funcToString$1.call(hasOwnProperty$2).replace(reRegExpChar, '\\$&')
+  funcToString$1.call(hasOwnProperty$1).replace(reRegExpChar, '\\$&')
   .replace(/hasOwnProperty|(function).*?(?=\\\()| for .+?(?=\\\])/g, '$1.*?') + '$'
 );
 
@@ -4184,7 +2620,7 @@ var HASH_UNDEFINED = '__lodash_hash_undefined__';
 var objectProto$3 = Object.prototype;
 
 /** Used to check objects for own properties. */
-var hasOwnProperty$3 = objectProto$3.hasOwnProperty;
+var hasOwnProperty$2 = objectProto$3.hasOwnProperty;
 
 /**
  * Gets the hash value for `key`.
@@ -4201,7 +2637,7 @@ function hashGet(key) {
     var result = data[key];
     return result === HASH_UNDEFINED ? undefined : result;
   }
-  return hasOwnProperty$3.call(data, key) ? data[key] : undefined;
+  return hasOwnProperty$2.call(data, key) ? data[key] : undefined;
 }
 
 var _hashGet = hashGet;
@@ -4210,7 +2646,7 @@ var _hashGet = hashGet;
 var objectProto$4 = Object.prototype;
 
 /** Used to check objects for own properties. */
-var hasOwnProperty$4 = objectProto$4.hasOwnProperty;
+var hasOwnProperty$3 = objectProto$4.hasOwnProperty;
 
 /**
  * Checks if a hash value for `key` exists.
@@ -4223,7 +2659,7 @@ var hasOwnProperty$4 = objectProto$4.hasOwnProperty;
  */
 function hashHas(key) {
   var data = this.__data__;
-  return _nativeCreate ? (data[key] !== undefined) : hasOwnProperty$4.call(data, key);
+  return _nativeCreate ? (data[key] !== undefined) : hasOwnProperty$3.call(data, key);
 }
 
 var _hashHas = hashHas;
@@ -4258,15 +2694,13 @@ var _hashSet = hashSet;
  * @param {Array} [entries] The key-value pairs to cache.
  */
 function Hash(entries) {
-  var this$1 = this;
-
   var index = -1,
       length = entries == null ? 0 : entries.length;
 
   this.clear();
   while (++index < length) {
     var entry = entries[index];
-    this$1.set(entry[0], entry[1]);
+    this.set(entry[0], entry[1]);
   }
 }
 
@@ -4406,15 +2840,13 @@ var _mapCacheSet = mapCacheSet;
  * @param {Array} [entries] The key-value pairs to cache.
  */
 function MapCache(entries) {
-  var this$1 = this;
-
   var index = -1,
       length = entries == null ? 0 : entries.length;
 
   this.clear();
   while (++index < length) {
     var entry = entries[index];
-    this$1.set(entry[0], entry[1]);
+    this.set(entry[0], entry[1]);
   }
 }
 
@@ -4540,7 +2972,7 @@ var _baseAssignValue = baseAssignValue;
 var objectProto$5 = Object.prototype;
 
 /** Used to check objects for own properties. */
-var hasOwnProperty$5 = objectProto$5.hasOwnProperty;
+var hasOwnProperty$4 = objectProto$5.hasOwnProperty;
 
 /**
  * Assigns `value` to `key` of `object` if the existing value is not equivalent
@@ -4554,7 +2986,7 @@ var hasOwnProperty$5 = objectProto$5.hasOwnProperty;
  */
 function assignValue(object, key, value) {
   var objValue = object[key];
-  if (!(hasOwnProperty$5.call(object, key) && eq_1(objValue, value)) ||
+  if (!(hasOwnProperty$4.call(object, key) && eq_1(objValue, value)) ||
       (value === undefined && !(key in object))) {
     _baseAssignValue(object, key, value);
   }
@@ -4671,7 +3103,7 @@ var _baseIsArguments = baseIsArguments;
 var objectProto$6 = Object.prototype;
 
 /** Used to check objects for own properties. */
-var hasOwnProperty$6 = objectProto$6.hasOwnProperty;
+var hasOwnProperty$5 = objectProto$6.hasOwnProperty;
 
 /** Built-in value references. */
 var propertyIsEnumerable = objectProto$6.propertyIsEnumerable;
@@ -4695,7 +3127,7 @@ var propertyIsEnumerable = objectProto$6.propertyIsEnumerable;
  * // => false
  */
 var isArguments = _baseIsArguments(function() { return arguments; }()) ? _baseIsArguments : function(value) {
-  return isObjectLike_1(value) && hasOwnProperty$6.call(value, 'callee') &&
+  return isObjectLike_1(value) && hasOwnProperty$5.call(value, 'callee') &&
     !propertyIsEnumerable.call(value, 'callee');
 };
 
@@ -4749,7 +3181,7 @@ var stubFalse_1 = stubFalse;
 
 var isBuffer_1 = createCommonjsModule(function (module, exports) {
 /** Detect free variable `exports`. */
-var freeExports = 'object' == 'object' && exports && !exports.nodeType && exports;
+var freeExports = exports && !exports.nodeType && exports;
 
 /** Detect free variable `module`. */
 var freeModule = freeExports && 'object' == 'object' && module && !module.nodeType && module;
@@ -4800,10 +3232,13 @@ var reIsUint = /^(?:0|[1-9]\d*)$/;
  * @returns {boolean} Returns `true` if `value` is a valid index, else `false`.
  */
 function isIndex(value, length) {
+  var type = typeof value;
   length = length == null ? MAX_SAFE_INTEGER : length;
+
   return !!length &&
-    (typeof value == 'number' || reIsUint.test(value)) &&
-    (value > -1 && value % 1 == 0 && value < length);
+    (type == 'number' ||
+      (type != 'symbol' && reIsUint.test(value))) &&
+        (value > -1 && value % 1 == 0 && value < length);
 }
 
 var _isIndex = isIndex;
@@ -4918,7 +3353,7 @@ var _baseUnary = baseUnary;
 
 var _nodeUtil = createCommonjsModule(function (module, exports) {
 /** Detect free variable `exports`. */
-var freeExports = 'object' == 'object' && exports && !exports.nodeType && exports;
+var freeExports = exports && !exports.nodeType && exports;
 
 /** Detect free variable `module`. */
 var freeModule = freeExports && 'object' == 'object' && module && !module.nodeType && module;
@@ -4932,6 +3367,14 @@ var freeProcess = moduleExports && _freeGlobal.process;
 /** Used to access faster Node.js helpers. */
 var nodeUtil = (function() {
   try {
+    // Use `util.types` for Node.js 10+.
+    var types = freeModule && freeModule.require && freeModule.require('util').types;
+
+    if (types) {
+      return types;
+    }
+
+    // Legacy `process.binding('util')` for Node.js < 10.
     return freeProcess && freeProcess.binding && freeProcess.binding('util');
   } catch (e) {}
 }());
@@ -4967,7 +3410,7 @@ var isTypedArray_1 = isTypedArray;
 var objectProto$7 = Object.prototype;
 
 /** Used to check objects for own properties. */
-var hasOwnProperty$7 = objectProto$7.hasOwnProperty;
+var hasOwnProperty$6 = objectProto$7.hasOwnProperty;
 
 /**
  * Creates an array of the enumerable property names of the array-like `value`.
@@ -4987,7 +3430,7 @@ function arrayLikeKeys(value, inherited) {
       length = result.length;
 
   for (var key in value) {
-    if ((inherited || hasOwnProperty$7.call(value, key)) &&
+    if ((inherited || hasOwnProperty$6.call(value, key)) &&
         !(skipIndexes && (
            // Safari 9 has enumerable `arguments.length` in strict mode.
            key == 'length' ||
@@ -5050,7 +3493,7 @@ var _nativeKeys = nativeKeys;
 var objectProto$9 = Object.prototype;
 
 /** Used to check objects for own properties. */
-var hasOwnProperty$8 = objectProto$9.hasOwnProperty;
+var hasOwnProperty$7 = objectProto$9.hasOwnProperty;
 
 /**
  * The base implementation of `_.keys` which doesn't treat sparse arrays as dense.
@@ -5065,7 +3508,7 @@ function baseKeys(object) {
   }
   var result = [];
   for (var key in Object(object)) {
-    if (hasOwnProperty$8.call(object, key) && key != 'constructor') {
+    if (hasOwnProperty$7.call(object, key) && key != 'constructor') {
       result.push(key);
     }
   }
@@ -5179,7 +3622,7 @@ var _nativeKeysIn = nativeKeysIn;
 var objectProto$10 = Object.prototype;
 
 /** Used to check objects for own properties. */
-var hasOwnProperty$9 = objectProto$10.hasOwnProperty;
+var hasOwnProperty$8 = objectProto$10.hasOwnProperty;
 
 /**
  * The base implementation of `_.keysIn` which doesn't treat sparse arrays as dense.
@@ -5196,7 +3639,7 @@ function baseKeysIn(object) {
       result = [];
 
   for (var key in object) {
-    if (!(key == 'constructor' && (isProto || !hasOwnProperty$9.call(object, key)))) {
+    if (!(key == 'constructor' && (isProto || !hasOwnProperty$8.call(object, key)))) {
       result.push(key);
     }
   }
@@ -5251,7 +3694,7 @@ var _baseAssignIn = baseAssignIn;
 
 var _cloneBuffer = createCommonjsModule(function (module, exports) {
 /** Detect free variable `exports`. */
-var freeExports = 'object' == 'object' && exports && !exports.nodeType && exports;
+var freeExports = exports && !exports.nodeType && exports;
 
 /** Detect free variable `module`. */
 var freeModule = freeExports && 'object' == 'object' && module && !module.nodeType && module;
@@ -5515,9 +3958,9 @@ var Promise = _getNative(_root, 'Promise');
 var _Promise = Promise;
 
 /* Built-in method references that are verified to be native. */
-var Set$1 = _getNative(_root, 'Set');
+var Set = _getNative(_root, 'Set');
 
-var _Set = Set$1;
+var _Set = Set;
 
 /* Built-in method references that are verified to be native. */
 var WeakMap = _getNative(_root, 'WeakMap');
@@ -5579,7 +4022,7 @@ var _getTag = getTag;
 var objectProto$12 = Object.prototype;
 
 /** Used to check objects for own properties. */
-var hasOwnProperty$10 = objectProto$12.hasOwnProperty;
+var hasOwnProperty$9 = objectProto$12.hasOwnProperty;
 
 /**
  * Initializes an array clone.
@@ -5590,10 +4033,10 @@ var hasOwnProperty$10 = objectProto$12.hasOwnProperty;
  */
 function initCloneArray(array) {
   var length = array.length,
-      result = array.constructor(length);
+      result = new array.constructor(length);
 
   // Add properties assigned by `RegExp#exec`.
-  if (length && typeof array[0] == 'string' && hasOwnProperty$10.call(array, 'index')) {
+  if (length && typeof array[0] == 'string' && hasOwnProperty$9.call(array, 'index')) {
     result.index = array.index;
     result.input = array.input;
   }
@@ -5637,87 +4080,6 @@ function cloneDataView(dataView, isDeep) {
 
 var _cloneDataView = cloneDataView;
 
-/**
- * Adds the key-value `pair` to `map`.
- *
- * @private
- * @param {Object} map The map to modify.
- * @param {Array} pair The key-value pair to add.
- * @returns {Object} Returns `map`.
- */
-function addMapEntry(map, pair) {
-  // Don't return `map.set` because it's not chainable in IE 11.
-  map.set(pair[0], pair[1]);
-  return map;
-}
-
-var _addMapEntry = addMapEntry;
-
-/**
- * A specialized version of `_.reduce` for arrays without support for
- * iteratee shorthands.
- *
- * @private
- * @param {Array} [array] The array to iterate over.
- * @param {Function} iteratee The function invoked per iteration.
- * @param {*} [accumulator] The initial value.
- * @param {boolean} [initAccum] Specify using the first element of `array` as
- *  the initial value.
- * @returns {*} Returns the accumulated value.
- */
-function arrayReduce(array, iteratee, accumulator, initAccum) {
-  var index = -1,
-      length = array == null ? 0 : array.length;
-
-  if (initAccum && length) {
-    accumulator = array[++index];
-  }
-  while (++index < length) {
-    accumulator = iteratee(accumulator, array[index], index, array);
-  }
-  return accumulator;
-}
-
-var _arrayReduce = arrayReduce;
-
-/**
- * Converts `map` to its key-value pairs.
- *
- * @private
- * @param {Object} map The map to convert.
- * @returns {Array} Returns the key-value pairs.
- */
-function mapToArray(map) {
-  var index = -1,
-      result = Array(map.size);
-
-  map.forEach(function(value, key) {
-    result[++index] = [key, value];
-  });
-  return result;
-}
-
-var _mapToArray = mapToArray;
-
-/** Used to compose bitmasks for cloning. */
-var CLONE_DEEP_FLAG = 1;
-
-/**
- * Creates a clone of `map`.
- *
- * @private
- * @param {Object} map The map to clone.
- * @param {Function} cloneFunc The function to clone values.
- * @param {boolean} [isDeep] Specify a deep clone.
- * @returns {Object} Returns the cloned map.
- */
-function cloneMap(map, isDeep, cloneFunc) {
-  var array = isDeep ? cloneFunc(_mapToArray(map), CLONE_DEEP_FLAG) : _mapToArray(map);
-  return _arrayReduce(array, _addMapEntry, new map.constructor);
-}
-
-var _cloneMap = cloneMap;
-
 /** Used to match `RegExp` flags from their coerced string values. */
 var reFlags = /\w*$/;
 
@@ -5735,60 +4097,6 @@ function cloneRegExp(regexp) {
 }
 
 var _cloneRegExp = cloneRegExp;
-
-/**
- * Adds `value` to `set`.
- *
- * @private
- * @param {Object} set The set to modify.
- * @param {*} value The value to add.
- * @returns {Object} Returns `set`.
- */
-function addSetEntry(set, value) {
-  // Don't return `set.add` because it's not chainable in IE 11.
-  set.add(value);
-  return set;
-}
-
-var _addSetEntry = addSetEntry;
-
-/**
- * Converts `set` to an array of its values.
- *
- * @private
- * @param {Object} set The set to convert.
- * @returns {Array} Returns the values.
- */
-function setToArray(set) {
-  var index = -1,
-      result = Array(set.size);
-
-  set.forEach(function(value) {
-    result[++index] = value;
-  });
-  return result;
-}
-
-var _setToArray = setToArray;
-
-/** Used to compose bitmasks for cloning. */
-var CLONE_DEEP_FLAG$1 = 1;
-
-/**
- * Creates a clone of `set`.
- *
- * @private
- * @param {Object} set The set to clone.
- * @param {Function} cloneFunc The function to clone values.
- * @param {boolean} [isDeep] Specify a deep clone.
- * @returns {Object} Returns the cloned set.
- */
-function cloneSet(set, isDeep, cloneFunc) {
-  var array = isDeep ? cloneFunc(_setToArray(set), CLONE_DEEP_FLAG$1) : _setToArray(set);
-  return _arrayReduce(array, _addSetEntry, new set.constructor);
-}
-
-var _cloneSet = cloneSet;
 
 /** Used to convert symbols to primitives and strings. */
 var symbolProto = _Symbol ? _Symbol.prototype : undefined,
@@ -5848,16 +4156,15 @@ var arrayBufferTag$1 = '[object ArrayBuffer]',
  * Initializes an object clone based on its `toStringTag`.
  *
  * **Note:** This function only supports cloning values with tags of
- * `Boolean`, `Date`, `Error`, `Number`, `RegExp`, or `String`.
+ * `Boolean`, `Date`, `Error`, `Map`, `Number`, `RegExp`, `Set`, or `String`.
  *
  * @private
  * @param {Object} object The object to clone.
  * @param {string} tag The `toStringTag` of the object to clone.
- * @param {Function} cloneFunc The function to clone values.
  * @param {boolean} [isDeep] Specify a deep clone.
  * @returns {Object} Returns the initialized clone.
  */
-function initCloneByTag(object, tag, cloneFunc, isDeep) {
+function initCloneByTag(object, tag, isDeep) {
   var Ctor = object.constructor;
   switch (tag) {
     case arrayBufferTag$1:
@@ -5876,7 +4183,7 @@ function initCloneByTag(object, tag, cloneFunc, isDeep) {
       return _cloneTypedArray(object, isDeep);
 
     case mapTag$2:
-      return _cloneMap(object, isDeep, cloneFunc);
+      return new Ctor;
 
     case numberTag$1:
     case stringTag$1:
@@ -5886,7 +4193,7 @@ function initCloneByTag(object, tag, cloneFunc, isDeep) {
       return _cloneRegExp(object);
 
     case setTag$2:
-      return _cloneSet(object, isDeep, cloneFunc);
+      return new Ctor;
 
     case symbolTag:
       return _cloneSymbol(object);
@@ -5939,8 +4246,88 @@ function initCloneObject(object) {
 
 var _initCloneObject = initCloneObject;
 
+/** `Object#toString` result references. */
+var mapTag$3 = '[object Map]';
+
+/**
+ * The base implementation of `_.isMap` without Node.js optimizations.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a map, else `false`.
+ */
+function baseIsMap(value) {
+  return isObjectLike_1(value) && _getTag(value) == mapTag$3;
+}
+
+var _baseIsMap = baseIsMap;
+
+/* Node.js helper references. */
+var nodeIsMap = _nodeUtil && _nodeUtil.isMap;
+
+/**
+ * Checks if `value` is classified as a `Map` object.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.3.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a map, else `false`.
+ * @example
+ *
+ * _.isMap(new Map);
+ * // => true
+ *
+ * _.isMap(new WeakMap);
+ * // => false
+ */
+var isMap = nodeIsMap ? _baseUnary(nodeIsMap) : _baseIsMap;
+
+var isMap_1 = isMap;
+
+/** `Object#toString` result references. */
+var setTag$3 = '[object Set]';
+
+/**
+ * The base implementation of `_.isSet` without Node.js optimizations.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a set, else `false`.
+ */
+function baseIsSet(value) {
+  return isObjectLike_1(value) && _getTag(value) == setTag$3;
+}
+
+var _baseIsSet = baseIsSet;
+
+/* Node.js helper references. */
+var nodeIsSet = _nodeUtil && _nodeUtil.isSet;
+
+/**
+ * Checks if `value` is classified as a `Set` object.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.3.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a set, else `false`.
+ * @example
+ *
+ * _.isSet(new Set);
+ * // => true
+ *
+ * _.isSet(new WeakSet);
+ * // => false
+ */
+var isSet = nodeIsSet ? _baseUnary(nodeIsSet) : _baseIsSet;
+
+var isSet_1 = isSet;
+
 /** Used to compose bitmasks for cloning. */
-var CLONE_DEEP_FLAG$2 = 1,
+var CLONE_DEEP_FLAG = 1,
     CLONE_FLAT_FLAG = 2,
     CLONE_SYMBOLS_FLAG = 4;
 
@@ -5952,11 +4339,11 @@ var argsTag$2 = '[object Arguments]',
     errorTag$1 = '[object Error]',
     funcTag$2 = '[object Function]',
     genTag$1 = '[object GeneratorFunction]',
-    mapTag$3 = '[object Map]',
+    mapTag$4 = '[object Map]',
     numberTag$2 = '[object Number]',
     objectTag$2 = '[object Object]',
     regexpTag$2 = '[object RegExp]',
-    setTag$3 = '[object Set]',
+    setTag$4 = '[object Set]',
     stringTag$2 = '[object String]',
     symbolTag$1 = '[object Symbol]',
     weakMapTag$2 = '[object WeakMap]';
@@ -5980,9 +4367,9 @@ cloneableTags[arrayBufferTag$2] = cloneableTags[dataViewTag$3] =
 cloneableTags[boolTag$2] = cloneableTags[dateTag$2] =
 cloneableTags[float32Tag$2] = cloneableTags[float64Tag$2] =
 cloneableTags[int8Tag$2] = cloneableTags[int16Tag$2] =
-cloneableTags[int32Tag$2] = cloneableTags[mapTag$3] =
+cloneableTags[int32Tag$2] = cloneableTags[mapTag$4] =
 cloneableTags[numberTag$2] = cloneableTags[objectTag$2] =
-cloneableTags[regexpTag$2] = cloneableTags[setTag$3] =
+cloneableTags[regexpTag$2] = cloneableTags[setTag$4] =
 cloneableTags[stringTag$2] = cloneableTags[symbolTag$1] =
 cloneableTags[uint8Tag$2] = cloneableTags[uint8ClampedTag$2] =
 cloneableTags[uint16Tag$2] = cloneableTags[uint32Tag$2] = true;
@@ -6007,7 +4394,7 @@ cloneableTags[weakMapTag$2] = false;
  */
 function baseClone(value, bitmask, customizer, key, object, stack) {
   var result,
-      isDeep = bitmask & CLONE_DEEP_FLAG$2,
+      isDeep = bitmask & CLONE_DEEP_FLAG,
       isFlat = bitmask & CLONE_FLAT_FLAG,
       isFull = bitmask & CLONE_SYMBOLS_FLAG;
 
@@ -6044,7 +4431,7 @@ function baseClone(value, bitmask, customizer, key, object, stack) {
       if (!cloneableTags[tag]) {
         return object ? value : {};
       }
-      result = _initCloneByTag(value, tag, baseClone, isDeep);
+      result = _initCloneByTag(value, tag, isDeep);
     }
   }
   // Check for circular references and return its corresponding clone.
@@ -6054,6 +4441,22 @@ function baseClone(value, bitmask, customizer, key, object, stack) {
     return stacked;
   }
   stack.set(value, result);
+
+  if (isSet_1(value)) {
+    value.forEach(function(subValue) {
+      result.add(baseClone(subValue, bitmask, customizer, subValue, value, stack));
+    });
+
+    return result;
+  }
+
+  if (isMap_1(value)) {
+    value.forEach(function(subValue, key) {
+      result.set(key, baseClone(subValue, bitmask, customizer, key, value, stack));
+    });
+
+    return result;
+  }
 
   var keysFunc = isFull
     ? (isFlat ? _getAllKeysIn : _getAllKeys)
@@ -6074,7 +4477,7 @@ function baseClone(value, bitmask, customizer, key, object, stack) {
 var _baseClone = baseClone;
 
 /** Used to compose bitmasks for cloning. */
-var CLONE_DEEP_FLAG$3 = 1,
+var CLONE_DEEP_FLAG$1 = 1,
     CLONE_SYMBOLS_FLAG$1 = 4;
 
 /**
@@ -6096,7 +4499,7 @@ var CLONE_DEEP_FLAG$3 = 1,
  * // => false
  */
 function cloneDeep(value) {
-  return _baseClone(value, CLONE_DEEP_FLAG$3 | CLONE_SYMBOLS_FLAG$1);
+  return _baseClone(value, CLONE_DEEP_FLAG$1 | CLONE_SYMBOLS_FLAG$1);
 }
 
 var cloneDeep_1 = cloneDeep;
@@ -6176,7 +4579,7 @@ function mount (
 
   var elm = options.attachToDocument ? createElement() : undefined;
 
-  var mergedOptions = mergeOptions(options, config);
+  var mergedOptions = mergeOptions.mergeOptions(options, config);
 
   var parentVm = createInstance(
     component,
@@ -6221,7 +4624,7 @@ function shallowMount (
 
 // 
 var toTypes = [String, Object];
-var eventTypes = [String, Array];
+var eventTypes$1 = [String, Array];
 
 var RouterLinkStub = {
   name: 'RouterLinkStub',
@@ -6240,7 +4643,7 @@ var RouterLinkStub = {
     activeClass: String,
     exactActiveClass: String,
     event: {
-      type: eventTypes,
+      type: eventTypes$1,
       default: 'click'
     }
   },
@@ -6250,7 +4653,7 @@ var RouterLinkStub = {
 }
 
 function shallow (component, options) {
-  warn(
+  util.warn(
     "shallow has been renamed to shallowMount. shallow " +
     "will be removed in 1.0.0, use shallowMount instead"
   );
