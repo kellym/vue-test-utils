@@ -14,7 +14,7 @@ import extractOptions from '../options/extract-options'
 import deleteMountingOptions from '../options/delete-mounting-options'
 import createFunctionalComponent from './create-functional-component'
 import cloneDeep from 'lodash/cloneDeep'
-import { componentNeedsCompiling } from './validators'
+import { componentNeedsCompiling, componentHasProperty } from './validators'
 
 export default function createConstructor (
   component: Component,
@@ -28,7 +28,7 @@ export default function createConstructor (
     addMocks(mountingOptions.mocks, vue)
   }
 
-  if ((component.options && component.options.functional) || component.functional) {
+  if ((component.options && component.options.functional) || componentHasProperty(component, 'functional')) {
     component = createFunctionalComponent(component, mountingOptions)
   } else if (mountingOptions.context) {
     throwError(

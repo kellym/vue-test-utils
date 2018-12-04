@@ -103,3 +103,11 @@ export function isNameSelector (nameOptionsObject: any): boolean {
 
   return !!nameOptionsObject.name
 }
+
+export function componentHasProperty (component: Component, property: string): boolean {
+  while (component) {
+    if (component.hasOwnProperty(property)) return true
+    component = component.extends
+  }
+  return false
+}
